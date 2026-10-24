@@ -1,5 +1,5 @@
 import type { EvenAppBridge } from '@evenrealities/even_hub_sdk'
-import { BOMB, FROZEN, MAX_LEVEL, MYSTERY_BASE, RAINBOW, SHOOTER_Y, STAR, STONE, SWIPE_AIM_DEG, TICK_MS } from './layout.ts'
+import { BOMB, FROZEN, MAX_LEVEL, MAX_TICK_DT, MYSTERY_BASE, RAINBOW, SHOOTER_Y, STAR, STONE, SWIPE_AIM_DEG, TICK_MS } from './layout.ts'
 import { aimAngle, chooseStartLevel, continueGame, createGame, emptyStats, fire, idx, isOver, isPlaying, nudgeToNextLanding, paceEvery, setAim, skipLevel, startGame, swapBubbles, tick, DIFFICULTIES, MODES, type Difficulty, type Game, type Mode, type Phase, type Stats } from './game.ts'
 import { modeName, renderFireworks, renderGameOver, renderGrid, renderLevelCard, renderSplash } from './grid.ts'
 import { currentPage, frameMeter, invalidate, pipelined, pushScreen, setPipelined, showPage, type FrameMeter, type PageKind } from './renderer.ts'
@@ -44,6 +44,7 @@ export type App = {
   setDifficulty: (d: Difficulty) => void
   setStartLevel: (level: number) => void
   setPipelined: (on: boolean) => void
+  measurePush: () => void          // times full, tiny and ASCII-spaced screens on the glasses
   preview: (kind: PreviewKind) => void   // developer aid: shows an end screen with sample numbers
   status: () => Status
 }
@@ -63,6 +64,7 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
   let levelCardSkip = false          // the harder path is selected on the card
   let levelCardTap: (() => void) | null = null
   let continueOffered = false        // game over, with the second chance on the table
+  let measuring = false              // push-cost test running on the title screen
 
   async function loadHighScore(): Promise<void> {
     try {
@@ -212,18 +214,23 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
     if (loopRunning) return
     loopRunning = true
     try {
+      let lastTick = Date.now()
       while (isPlaying(game)) {
         const started = Date.now()
         if (overlayOpen) {
           await sleep(TICK_MS)
+          lastTick = Date.now()        // time under the menu does not count
           continue
         }
-        const changed = tick(game)
+        // Motion is time based: a slow push means a longer step, not a slower game.
+        const dt = Math.min(MAX_TICK_DT, (started - lastTick) / TICK_MS)
+        lastTick = started
+        const changed = tick(game, dt)
         if (game.justCleared) {
           game.justCleared = false
           saveProgress()
           saveStats()
-          if (isPlaying(game)) await showLevelUp()
+          if (isPlaying(game)) { await showLevelUp(); lastTick = Date.now() }
         }
         if (changed || screenDirty) {
           // Pipelined: the push runs alongside the next tick instead of pacing it.
@@ -321,6 +328,40 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
     screenDirty = true
     if (!isPlaying(game)) { invalidate(); void showCurrentScreen() }
     report(on ? 'Aim guide stops at the first bounce' : 'Full aim guide')
+  }
+
+  // Developer aid, from the phone page while on the title screen. Pushes the
+  // title, a one-character screen and the title with each empty cell as two
+  // ASCII spaces (two bytes instead of three), several times each, and reports
+  // the mean round trip of each. The ASCII-spaced title is left showing so
+  // the player can see whether its columns still line up.
+  async function measurePush(): Promise<void> {
+    if (measuring || isPlaying(game) || !currentPage()) return
+    measuring = true
+    try {
+      const full = renderSplash(game)
+      const ascii = full.replace(/\u3000/g, '  ')
+      const tiny = 'Ａ'
+      const times: Record<string, number[]> = { full: [], tiny: [], ascii: [] }
+      const timed = async (name: string, text: string) => {
+        const t0 = Date.now()
+        invalidate()
+        const ok = await pushScreen(bridge, text)
+        if (ok) times[name].push(Date.now() - t0)
+        screenText = text
+        onStatus(status())
+      }
+      for (let round = 0; round < 4; round++) {
+        await timed('full', full)
+        await timed('tiny', tiny)
+        await timed('full', full)
+        await timed('ascii', ascii)
+      }
+      const mean = (xs: number[]) => (xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : NaN)
+      report(`Push cost: full ${mean(times.full)} ms, one letter ${mean(times.tiny)} ms, ASCII spaces ${mean(times.ascii)} ms. Glasses now show the ASCII-spaced title.`)
+    } finally {
+      measuring = false
+    }
   }
 
   function setPipelinedUpdates(on: boolean): void {
@@ -496,6 +537,7 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
     setDifficulty,
     setStartLevel,
     setPipelined: setPipelinedUpdates,
+    measurePush: () => { void measurePush() },
     preview,
     status,
   }

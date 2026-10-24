@@ -310,5 +310,13 @@ lens; the rest of the page is grey.
   therefore one push at a time, with the loop waiting for each. The phone page
   shows the measured push round trip, the frames per second actually displayed
   while something was moving, the share of frames skipped, and a
-  "Glasses updates" switch to try pipelining on other firmware.
+  "Glasses updates" switch to try pipelining on other firmware. A "Measure
+  push cost" button on the title screen times a full title screen, a one-letter
+  screen and the title with every empty cell sent as two ASCII spaces (two
+  bytes instead of the three of U+3000), to show whether bytes or rendering set
+  the push time.
+- Motion is time based. The loop passes the real time elapsed since the last
+  tick, in units of `TICK_MS` (100 ms), so a shot covers the same distance per
+  second at 6 frames per second as it would at 12. A stall longer than three
+  ticks is capped so the shot never teleports.
 - The font is proportional. Only glyphs measured as one cell wide may go in the grid; see the font test page.

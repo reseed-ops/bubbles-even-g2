@@ -902,12 +902,16 @@ const hurries = (g: Game): boolean => g.mode !== 'puzzle' && HURRY_SCALE[g.diffi
 export const blinkOn = (g: Game): boolean => Math.floor(g.ticks / BLINK_TICKS) % 2 === 0
 
 // Advance one frame. Returns true when something on screen may have changed.
-export function tick(g: Game): boolean {
+// Advances the game by dt ticks (default one). The loop passes the real time
+// elapsed since the last tick, so shot speed, effects and the hurry-up clock
+// run at the same pace whatever the glasses' frame rate.
+export function tick(g: Game, dt = 1): boolean {
   if (g.phase !== 'play') return false
-  g.ticks++
+  const wasBlinkOn = blinkOn(g)
+  g.ticks += dt
   let changed = false
   if (g.effectFrame > 0) {
-    g.effectFrame--
+    g.effectFrame = Math.max(0, g.effectFrame - dt)
     changed = true
     if (g.effectFrame === 0) {
       g.flash = []
@@ -915,12 +919,12 @@ export function tick(g: Game): boolean {
       g.blast = []
     }
   }
-  if (wallWarning(g) && g.ticks % BLINK_TICKS === 0) changed = true
+  if (wallWarning(g) && blinkOn(g) !== wasBlinkOn) changed = true
 
   const f = g.flying
   if (!f) {
     if (g.queuedShot) return fire(g) || changed
-    if (hurries(g)) g.idleTicks++
+    if (hurries(g)) g.idleTicks += dt
     if (hurries(g) && g.idleTicks >= hurryTicks(g)) {
       g.idleTicks = 0
       if (g.mode === 'endless') pushColumn(g)
@@ -933,7 +937,7 @@ export function tick(g: Game): boolean {
 
   let px = Math.round(f.x), py = Math.round(f.y)
   g.trail = []
-  const steps = Math.max(1, Math.round(g.speed / SUBSTEP))
+  const steps = Math.max(1, Math.round(g.speed * dt / SUBSTEP))
   for (let i = 0; i < steps; i++) {
     stepMover(f, SUBSTEP)
     const cx = Math.round(f.x), cy = Math.round(f.y)
@@ -941,7 +945,7 @@ export function tick(g: Game): boolean {
     const previous = idx(px, py)
     if (g.trail[g.trail.length - 1] !== previous) {
       g.trail.push(previous)
-      if (g.trail.length > 2) g.trail.shift()
+      if (g.trail.length > 3) g.trail.shift()
     }
     collectPickup(g, idx(cx, cy))
     if (occupied(g, cx, cy)) { settle(g, px, py, f.type); return true } // cannot happen with 8-neighbour landing; guard anyway

@@ -79,6 +79,7 @@
       .score dd { color: var(--ink); font-variant-numeric: tabular-nums; }
 
       .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 0 18px; }
+      .actions .wide { grid-column: 1 / -1; }
 
       /* Choices: a row of joined segments, the chosen one filled. */
       .choice { display: grid; grid-template-columns: 84px 1fr; align-items: center; gap: 12px; margin: 0 0 10px; }
@@ -156,6 +157,7 @@
       <div class="actions">
         <button id="new-game" disabled>New game</button>
         <button id="center-aim" disabled>Center aim</button>
+        <button id="measure" class="wide" disabled>Measure push cost</button>
       </div>
 
       <!-- The current choice is the filled segment; the others switch to it. -->

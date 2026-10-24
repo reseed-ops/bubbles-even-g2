@@ -73,6 +73,7 @@ function render(status: Status): void {
   $('skipped').textContent = status.frame ? `${Math.round(status.frame.skipped * 100)}%` : '–'
   $<HTMLButtonElement>('new-game').disabled = status.page === null
   $<HTMLButtonElement>('center-aim').disabled = status.phase !== 'play'
+  $<HTMLButtonElement>('measure').disabled = status.page === null || status.phase === 'play'
   const connected = status.page !== null
   document.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((b) => {
     b.disabled = !connected
@@ -133,11 +134,13 @@ async function boot(): Promise<void> {
   if (params.get('aim') === 'short') app.setHardAim(true)
   const level = Number(params.get('level'))   // developer aid: unlock and pick a start level
   if (level > 1) { app.game.levelReached = Math.max(app.game.levelReached, level); app.setStartLevel(level) }
+  if (params.get('measure') === '1') setTimeout(() => app.measurePush(), 1500)   // developer aid: run the push-cost test once connected
   const preview = params.get('preview')
   if (preview === 'over' || preview === 'won' || preview === 'title' || preview === 'blast' || preview === 'specials' || preview === 'card') app.preview(preview)
 
   $('new-game').onclick = () => app.newGame()
   $('center-aim').onclick = () => app.centerAim()
+  $('measure').onclick = () => app.measurePush()
   document.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((b) => { b.onclick = () => app.setMode(b.dataset.mode as Mode) })
   document.querySelectorAll<HTMLButtonElement>('[data-aim]').forEach((b) => { b.onclick = () => app.setHardAim(b.dataset.aim === 'short') })
   document.querySelectorAll<HTMLButtonElement>('[data-difficulty]').forEach((b) => { b.onclick = () => app.setDifficulty(b.dataset.difficulty as Difficulty) })

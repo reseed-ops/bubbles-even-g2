@@ -158,7 +158,7 @@ function gridCells(g: Game, overlay?: string): string[] {
     if (path.length && path.length === full.length) cells[path[path.length - 1]] = TARGET
   }
   for (const c of g.pickups) cells[c] = PICKUP
-  const age = g.effectFrame > 0 ? g.effectFrames - g.effectFrame : 0
+  const age = g.effectFrame > 0 ? Math.floor(g.effectFrames - g.effectFrame) : 0
   g.blast.forEach((ring, i) => {
     const glyph = RING_BY_AGE[age - 1 - i]
     if (glyph) for (const c of ring) cells[c] = glyph

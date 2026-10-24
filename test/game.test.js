@@ -827,3 +827,26 @@ test('all 100 Frozen Bubble levels load attached, clear of the shooter, with a m
   }
 })
 
+
+test('tick scales motion, effects and the hurry clock by elapsed time', () => {
+  const a = classic(); startGame(a); setAim(a, 0); fire(a)
+  const b = classic(); startGame(b); setAim(b, 0); fire(b)
+  tick(a); tick(a)
+  tick(b, 2)
+  assert.ok(a.flying && b.flying, 'both shots are still in the air after a short flight')
+  assert.ok(Math.abs(a.flying.x - b.flying.x) < 1e-9, 'two unit ticks cover the same distance as one double tick')
+
+  const c = classic(); startGame(c); setAim(c, 0); fire(c)
+  let n = 0
+  while (c.flying && n++ < 400) tick(c)
+  if (c.effectFrame > 0) {
+    const frames = c.effectFrame
+    tick(c, 0.5)
+    assert.equal(c.effectFrame, frames - 0.5, 'effects count down in fractional ticks')
+    assert.ok(renderGrid(c).length > 0, 'a fractional effect age still renders')
+  }
+
+  const d = classic(); d.mode = 'pulley'; startGame(d)
+  tick(d, 2.5)
+  assert.equal(d.idleTicks, 2.5, 'the hurry-up clock advances by elapsed ticks')
+})

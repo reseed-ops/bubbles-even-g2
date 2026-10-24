@@ -34,7 +34,8 @@ export const SWIPE_AIM_DEG = 8       // most a swipe turns the aim; less when th
 export const SUBSTEP = 0.2           // collision sub-step in cells
 export const AIM_MAX_STEPS = 400     // aim-line trace length in sub-steps (80 cells)
 
-export const TICK_MS = 80            // ~12 fps target; BLE text push is ~83 ms
+export const TICK_MS = 100           // one game tick of motion; the loop scales each tick by real elapsed time
+export const MAX_TICK_DT = 3         // a stall longer than this many ticks slows the game instead of teleporting the shot
 
 export const MAX_TYPES = 8           // Frozen Bubble has eight colours
 
