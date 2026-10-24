@@ -1,6 +1,6 @@
 import type { EvenAppBridge } from '@evenrealities/even_hub_sdk'
 import { BOMB, FROZEN, MYSTERY_BASE, PUSH_EVERY, RAINBOW, SHOOTER_Y, SHOTS_PER_WALL_ADVANCE, STAR, STONE, SWIPE_AIM_DEG, TICK_MS } from './layout.ts'
-import { aimAngle, chooseStartLevel, createGame, fire, idx, isOver, isPlaying, nudgeToNextLanding, setAim, skipLevel, startGame, swapBubbles, tick, LEVEL_COUNT, MODES, type Game, type Mode, type Phase } from './game.ts'
+import { aimAngle, chooseStartLevel, continueGame, createGame, fire, idx, isOver, isPlaying, nudgeToNextLanding, setAim, skipLevel, startGame, swapBubbles, tick, LEVEL_COUNT, MODES, type Game, type Mode, type Phase } from './game.ts'
 import { modeName, renderFireworks, renderGameOver, renderGrid, renderLevelCard, renderSplash } from './grid.ts'
 import { currentPage, invalidate, pushScreen, showPage, type PageKind } from './renderer.ts'
 import { toInput, type Input } from './events.ts'
@@ -51,6 +51,7 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
   let levelCardOpen = false          // waiting for a tap to go on
   let levelCardSkip = false          // the harder path is selected on the card
   let levelCardTap: (() => void) | null = null
+  let continueOffered = false        // game over, with the second chance on the table
 
   async function loadHighScore(): Promise<void> {
     try {
@@ -83,7 +84,7 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
 
   function currentScreen(): string {
     if (isPlaying(game)) return renderGrid(game)
-    if (isOver(game)) return renderGameOver(game)
+    if (isOver(game)) return renderGameOver(game, continueOffered)
     return renderSplash(game)
   }
 
@@ -202,9 +203,10 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
         if (changed || screenDirty) await pushPlayScreen()
         if (isOver(game)) {
           saveHighScore()
+          continueOffered = !game.won && game.continues > 0
           await sleep(300)
           await showCurrentScreen()
-          report(game.won ? 'All levels cleared' : 'Game over')
+          report(game.won ? 'All levels cleared' : continueOffered ? 'Game over. Tap the glasses to continue once, swipe to end.' : 'Game over')
         }
         await sleep(Math.max(0, TICK_MS - (Date.now() - started)))
       }
@@ -273,8 +275,29 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
     report(on ? 'Aim guide stops at the first bounce' : 'Full aim guide')
   }
 
+  async function takeContinue(): Promise<void> {
+    continueOffered = false
+    if (!continueGame(game)) return
+    screenDirty = true
+    invalidate()
+    await pushText(renderGrid(game))
+    report('Continued. This run no longer counts for the best.')
+    await intro()
+    void loop()
+  }
+
+  function declineContinue(): void {
+    continueOffered = false
+    invalidate()
+    void showCurrentScreen().then(() => report('Game over'))
+  }
+
   function handle(input: Input): void {
     if (introRunning && (input.kind === 'tap' || input.kind === 'up' || input.kind === 'down' || input.kind === 'hold')) return
+    if (continueOffered && isOver(game)) {
+      if (input.kind === 'tap') { void takeContinue(); return }
+      if (input.kind === 'up' || input.kind === 'down') { declineContinue(); return }
+    }
     if (levelCardOpen && (input.kind === 'tap' || input.kind === 'up' || input.kind === 'down')) {
       levelCardInput(input.kind)
       return
@@ -376,6 +399,7 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
       game.field[idx(w - 3, 7)] = MYSTERY_BASE + 2
       game.next = RAINBOW
       game.combo = 3
+      game.pickups = [idx(10, SHOOTER_Y - 2)]
       invalidate()
       void showCurrentScreen().then(() => { report('Playing'); void loop() })
       return
@@ -402,6 +426,7 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
     game.newBest = game.score > game.highScore
     game.highScore = Math.max(game.highScore, game.score)
     game.phase = 'over'
+    continueOffered = !game.won && game.continues > 0
     invalidate()
     void showCurrentScreen().then(() => report(game.won ? 'All levels cleared' : 'Game over'))
   }

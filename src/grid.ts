@@ -20,6 +20,7 @@ const AXLE = '╋'    // pulley mode: the axle both groups hang from
 const DANGER = '・'
 const TRAIL = '・'
 const NEXT = '＞'
+const PICKUP = '＋'  // fly through it to load a special
 // Effect frames by age (0 = the frame the shot landed): popped bubbles
 // sparkle, burst, then fade; the blast rings ripple outward one frame later each.
 const POP_BY_AGE = ['★', '◎', '◌', '・']
@@ -157,6 +158,7 @@ function gridCells(g: Game, overlay?: string): string[] {
     path.forEach((c, i) => { cells[c] = glyphs[i] })
     if (path.length && path.length === full.length) cells[path[path.length - 1]] = TARGET
   }
+  for (const c of g.pickups) cells[c] = PICKUP
   const age = g.effectFrame > 0 ? g.effectFrames - g.effectFrame : 0
   g.blast.forEach((ring, i) => {
     const glyph = RING_BY_AGE[age - 1 - i]
@@ -265,7 +267,8 @@ export function renderLevelCard(g: Game, skip = false): string {
   ])
 }
 
-export function renderGameOver(g: Game): string {
+// offerContinue: the one second chance is still available and is being offered.
+export function renderGameOver(g: Game, offerContinue = false): string {
   const record = !g.ranked ? `BEST ${g.highScore} FROM LEVEL 1` : g.newBest ? `NEW BEST ${g.highScore}` : `BEST ${g.highScore}`
   return framed([
     '',
@@ -275,7 +278,7 @@ export function renderGameOver(g: Game): string {
     fullwidth(`${g.mode === 'endless' ? 'WAVE' : 'LEVEL'} ${g.level}`),
     fullwidth(record),
     '',
-    fullwidth('TAP: AGAIN  2 TAPS: QUIT'),
+    fullwidth(offerContinue ? 'TAP: CONTINUE  SWIPE: END' : 'TAP: AGAIN  2 TAPS: QUIT'),
   ])
 }
 

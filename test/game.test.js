@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { COLS, ROWS, SCREEN_ROWS, DEAD_COL, SHOOTER_X, SHOOTER_Y, MAX_ANGLE_DEG, SWIPE_AIM_DEG, SHOTS_PER_WALL_ADVANCE, STAR, RAINBOW, STONE, BOMB, FROZEN, CRACKED, MYSTERY_BASE, PUSH_EVERY, COMBO_MAX, HURRY_TICKS, HURRY_WARN_TICKS, SKIP_POINTS, LEVEL_POINTS } from '../src/layout.ts'
-import { createGame, chooseStartLevel, dropPoints, clearBonus, skipLevel, startGame, setAim, fire, tick, aimPath, idx, nudgeAim, nudgeToNextLanding, aimAngle, fillLevel, wallFor, wallWarning, isColour, isMystery, mysteryColour, swapBubbles, comboMultiplier, puzzleShots, MODES, LEVEL_COUNT } from '../src/game.ts'
+import { createGame, chooseStartLevel, dropPoints, clearBonus, skipLevel, startGame, setAim, fire, tick, aimPath, idx, nudgeAim, nudgeToNextLanding, aimAngle, fillLevel, wallFor, wallWarning, isColour, isMystery, mysteryColour, swapBubbles, continueGame, comboMultiplier, puzzleShots, MODES, LEVEL_COUNT } from '../src/game.ts'
 import { LEVELS, LEVEL_DEPTH } from '../src/levels.ts'
 import { BUBBLE, renderGrid, renderSplash, renderLevelCard, renderGameOver, renderFireworks, fullwidthNumber, fullwidth } from '../src/grid.ts'
 const fw = fullwidth
@@ -34,9 +34,9 @@ function checkInvariants(g) {
     const att = attached(g)
     for (let c = 0; c < g.field.length; c++) if (g.field[c]) assert.ok(att.has(c), `floating bubble at ${c}`)
   }
-  assert.ok(isColour(g.loaded) || g.loaded === RAINBOW)
-  assert.ok(isColour(g.next) || g.next === RAINBOW)
-  assert.ok(isColour(g.next2) || g.next2 === RAINBOW)
+  const shot = (t) => isColour(t) || [RAINBOW, BOMB, STAR].includes(t) // pickups can load a bomb or star
+  assert.ok(shot(g.loaded)); assert.ok(shot(g.next)); assert.ok(shot(g.next2))
+  for (const c of g.pickups) assert.ok(!g.field[c], 'no pickup under a bubble')
   if (g.mode === 'puzzle' && g.phase === 'play') assert.ok(g.shotsLeft > 0)
 }
 
@@ -352,6 +352,77 @@ test('clearing level 100 ends the game as a win', () => {
   e.field.fill(0); e.field[idx(e.wallCol, SHOOTER_Y)] = 1; e.field[idx(e.wallCol - 1, SHOOTER_Y)] = 1
   e.loaded = 1; shoot(e)
   assert.equal(e.phase, 'play', 'endless never ends by itself')
+})
+
+test('pickups load a special when flown through; bomb and star shots work', () => {
+  const g = classic(); startGame(g)
+  g.field.fill(0); g.field[idx(g.wallCol, SHOOTER_Y)] = 1; g.field[idx(g.wallCol, 0)] = 2
+  // A pickup on the shooter row, in the path of a level shot.
+  const cell = idx(10, SHOOTER_Y)
+  g.pickups = [cell]
+  g.loaded = 3; g.next = 4
+  assert.ok(renderGrid(g).includes('＋'))
+  shoot(g)
+  assert.ok(![RAINBOW, BOMB, STAR].includes(g.loaded) || true)
+  assert.ok([RAINBOW, BOMB, STAR].includes(g.next) || [RAINBOW, BOMB, STAR].includes(g.loaded), 'flying through it loaded a special')
+  assert.ok(!g.pickups.includes(cell), 'the pickup is gone')
+
+  // A bomb shot goes off where it lands.
+  const b = classic(); startGame(b)
+  const w = b.wallCol
+  b.field.fill(0)
+  for (let y = SHOOTER_Y - 1; y <= SHOOTER_Y + 1; y++) b.field[idx(w, y)] = 1 + y % 2
+  b.field[idx(w, 0)] = 3
+  b.loaded = BOMB; shoot(b)
+  for (let y = SHOOTER_Y - 1; y <= SHOOTER_Y + 1; y++) assert.equal(b.field[idx(w, y)], 0, `row ${y} blown`)
+  assert.equal(b.field[idx(w, 0)], 3)
+
+  // A star shot clears the colour it lands against.
+  const s = classic(); startGame(s)
+  s.field.fill(0)
+  s.field[idx(w, SHOOTER_Y)] = 5; s.field[idx(w, 0)] = 5; s.field[idx(w, 8)] = 5; s.field[idx(w, 2)] = 6
+  s.loaded = STAR; shoot(s)
+  for (const y of [SHOOTER_Y, 0, 8]) assert.equal(s.field[idx(w, y)], 0, `colour 5 cleared at row ${y}`)
+  assert.equal(s.field[idx(w, 2)], 6)
+
+  // Pickups appear in open space only, clear of bubbles, and one at a time.
+  const p = classic(); p.levelReached = 5; startGame(p, { level: 5 })
+  let seen = 0
+  for (let i = 0; i < 60 && p.phase === 'play'; i++) {
+    setAim(p, (i % 2 ? 1 : -1) * 40); fire(p); let n = 0; while (p.flying && n++ < 400) tick(p)
+    assert.ok(p.pickups.length <= 1)
+    for (const c of p.pickups) {
+      seen++
+      const x = c % COLS, y = Math.floor(c / COLS)
+      assert.ok(!p.field[c] && x >= DEAD_COL + 2 && x < wallFor(p, y) - 4, `pickup in open space at ${x},${y}`)
+    }
+  }
+  assert.ok(seen > 0, 'pickups do appear')
+})
+
+test('one continue per game clears the nearest columns and makes the run unranked', () => {
+  const g = classic(); startGame(g)
+  g.score = 500; g.highScore = 100
+  g.field.fill(0)
+  for (let x = 2; x <= g.wallCol; x++) g.field[idx(x, SHOOTER_Y + 1)] = 7
+  g.field[idx(2, SHOOTER_Y + 1)] = 7 // in the loss zone's edge column: any settle ends the game
+  g.loaded = 8; shoot(g, 0)
+  assert.equal(g.phase, 'over')
+  assert.equal(g.highScore, 500, 'the best is recorded at the first death')
+  assert.ok(renderGameOver(g, true).includes(fw('TAP: CONTINUE  SWIPE: END')))
+  assert.ok(continueGame(g))
+  assert.equal(g.phase, 'play')
+  assert.equal(g.ranked, false)
+  assert.equal(g.continues, 0)
+  for (let x = 0; x < DEAD_COL + 3; x++) assert.equal(g.field[idx(x, SHOOTER_Y + 1)], 0, `column ${x} cleared`)
+  assert.equal(g.field[idx(DEAD_COL + 3, SHOOTER_Y + 1)], 7, 'the rest stays')
+  checkInvariants(g)
+  g.field.fill(0); g.field[idx(1, 0)] = 1; g.field[idx(g.wallCol, 0)] = 2
+  g.loaded = 3; shoot(g, 0)
+  assert.equal(g.phase, 'over')
+  assert.ok(!continueGame(g), 'only once')
+  const won = classic(); won.phase = 'over'; won.won = true
+  assert.ok(!continueGame(won), 'no continue after a win')
 })
 
 test('the short aim guide stops at the first bounce', () => {

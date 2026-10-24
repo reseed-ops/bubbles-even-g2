@@ -53,6 +53,18 @@ around it, and any bomb caught in the blast goes off too. Ice ▦ (from level
 level 6) never pops and only falls when nothing holds it. Mystery bubbles ？
 are ordinary colours hidden until a shot lands or a pop happens beside them.
 
+### Pickups and the second chance
+
+From level 2 a ＋ sometimes appears in the open part of the field. A shot that
+flies through it loads a special as the next bubble: a rainbow, a bomb that
+goes off where it lands, or a star that clears the colour it lands against.
+Aim for the pickup on the way to the target. One pickup is out at a time.
+
+Once per game, a game over offers a continue: tap, and the three columns
+nearest the shooter are cleared (puzzle mode also gets five shots back) and
+play goes on. The run no longer counts for the best score; the best was
+recorded at the moment you first went down.
+
 ### Scoring extras
 
 Consecutive shots that remove something build a combo: the second pays
@@ -268,7 +280,7 @@ lens; the rest of the page is grey.
   the blast effect; `?preview=specials` stages a star, a rainbow and a stone
   with a rainbow queued (plus a bomb, ice and a mystery, and a running combo);
   `?mode=classic|pulley|endless|puzzle` picks the mode; `?aim=short` the
-  short aim guide.
+  short aim guide; `?preview=over` shows the game over with the continue offer.
 
 ## Known limits
 

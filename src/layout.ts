@@ -61,6 +61,16 @@ export const ENDLESS_START_DEPTH = 5
 // Puzzle mode: shots allowed per level = half the bubbles plus this.
 export const PUZZLE_EXTRA_SHOTS = 5
 
+// Pickups (Bricks and Balls style): a ＋ in the open field; a shot passing
+// through it loads a special as the next bubble.
+export const PICKUP_CHANCE = 0.35     // chance one appears after a shot, when none is out
+export const PICKUP_FROM_LEVEL = 2
+export const PICKUP_MARGIN = 4        // columns kept clear between a pickup and the nearest wall
+
+// One continue per game: the columns nearest the shooter are cleared.
+export const CONTINUES = 1
+export const CONTINUE_CLEAR = 3
+
 // Pulley mode: the group with more bubbles hangs this many columns closer
 // per PULLEY_WEIGHT bubbles of difference, up to PULLEY_MAX_SHIFT.
 export const PULLEY_WEIGHT = 4

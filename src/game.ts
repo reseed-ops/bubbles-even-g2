@@ -7,6 +7,7 @@ import {
   BLAST_SIZE, EFFECT_FRAMES, BLAST_FRAMES,
   STAR, RAINBOW, STONE, BOMB, FROZEN, CRACKED, MYSTERY_BASE, SPECIALS_FROM_LEVEL, RAINBOW_SHOT_CHANCE,
   COMBO_MAX, PUSH_EVERY, ENDLESS_START_DEPTH, PUZZLE_EXTRA_SHOTS,
+  PICKUP_CHANCE, PICKUP_FROM_LEVEL, PICKUP_MARGIN, CONTINUES, CONTINUE_CLEAR,
   PULLEY_WEIGHT, PULLEY_MAX_SHIFT,
   HURRY_WARN_TICKS, HURRY_TICKS, BLINK_TICKS,
   BONUS_PER_SHOT, SKIP_POINTS,
@@ -57,6 +58,8 @@ export type Game = {
   shotsLeft: number        // puzzle mode: shots before the level is lost; -1 elsewhere
   hardAim: boolean         // show the aim guide only up to its first bounce
   justCleared: boolean     // the last shot emptied the board (consumed by the app)
+  pickups: number[]        // cells holding a ＋; fly through one to load a special
+  continues: number        // second chances left this game
   aimDeg: number           // base aim in degrees, + is up
   trimDeg: number          // swipe-controlled offset
   flying: Flying | null
@@ -111,6 +114,8 @@ export function createGame(): Game {
     shotsLeft: -1,
     hardAim: false,
     justCleared: false,
+    pickups: [],
+    continues: CONTINUES,
     aimDeg: 0,
     trimDeg: 0,
     flying: null,
@@ -183,8 +188,22 @@ function countGroup(g: Game, group: 'top' | 'bottom'): number {
   return n
 }
 
+// Pickups sit in field space, so they move with the field and vanish when
+// a bubble lands on them or they leave the board.
+function shiftPickups(g: Game, by: number, rows?: (y: number) => boolean): void {
+  g.pickups = g.pickups
+    .map((c) => {
+      const x = c % COLS, y = Math.floor(c / COLS)
+      if (rows && !rows(y)) return c
+      const nx = x + by
+      return nx >= DEAD_COL && nx < COLS ? idx(nx, y) : -1
+    })
+    .filter((c) => c >= 0 && !g.field[c])
+}
+
 function moveRows(g: Game, group: 'top' | 'bottom', by: number): void {
   if (by === 0) return
+  shiftPickups(g, by, (y) => rowGroup(y) === group)
   for (let y = 0; y < ROWS; y++) {
     if (rowGroup(y) !== group) continue
     const row = g.field.subarray(y * COLS, (y + 1) * COLS)
@@ -253,6 +272,7 @@ function pushColumn(g: Game): void {
     for (let x = 0; x < COLS - 1; x++) g.field[idx(x, y)] = g.field[idx(x + 1, y)]
     g.field[idx(COLS - 1, y)] = 0
   }
+  shiftPickups(g, -1)
   const colours = endlessColours(g.level)
   for (let y = 0; y < ROWS; y++) {
     if (Math.random() < 0.15) continue
@@ -304,6 +324,7 @@ export function fillLevel(g: Game): void {
   g.idleTicks = 0
   g.flying = null
   g.queuedShot = false // a new layout should not be shot at blind
+  g.pickups = []
   g.trail = []
   g.flash = []
   g.falling = []
@@ -339,9 +360,68 @@ export function startGame(g: Game, opts: GameOptions = {}): void {
   g.lastLevelShots = 0
   g.combo = 0
   g.justCleared = false
+  g.continues = CONTINUES
   if (g.mode === 'endless') g.level = 1 // waves always start from the first
   fillLevel(g)
   g.phase = 'play'
+}
+
+// The second chance: the columns nearest the shooter are cleared and play
+// goes on, unranked. Puzzle mode gets a few shots back as well.
+export function continueGame(g: Game): boolean {
+  if (g.phase !== 'over' || g.won || g.continues <= 0) return false
+  g.continues--
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < DEAD_COL + CONTINUE_CLEAR; x++) g.field[idx(x, y)] = 0
+  }
+  if (g.mode === 'puzzle') g.shotsLeft = Math.max(g.shotsLeft, PUZZLE_EXTRA_SHOTS)
+  g.ranked = false
+  g.combo = 0
+  g.flying = null
+  g.queuedShot = false
+  g.trail = []
+  g.flash = []; g.falling = []; g.blast = []; g.effectFrame = 0
+  g.idleTicks = 0
+  g.phase = 'play'
+  return true
+}
+
+// Specials a pickup can load into the next slot.
+const PICKUP_SPECIALS = [RAINBOW, BOMB, STAR]
+
+// After a shot, maybe put a ＋ somewhere in the open field: an empty cell
+// well clear of the walls and the loss zone, never on the shooter row's
+// first cells. Pickups under a bubble (after a wall move) are dropped.
+function placePickup(g: Game): void {
+  g.pickups = g.pickups.filter((c) => !g.field[c])
+  if (g.pickups.length || g.level < PICKUP_FROM_LEVEL || Math.random() >= PICKUP_CHANCE) return
+  const candidates: number[] = []
+  for (let y = 0; y < ROWS; y++) {
+    const limit = wallFor(g, y) - PICKUP_MARGIN
+    for (let x = DEAD_COL + 2; x < limit; x++) {
+      const c = idx(x, y)
+      if (g.field[c]) continue
+      let nearBubble = false
+      forEachNeighbour(x, y, (nx, ny) => { if (g.field[idx(nx, ny)]) nearBubble = true })
+      if (!nearBubble) candidates.push(c)
+    }
+  }
+  if (candidates.length) g.pickups.push(candidates[randomInt(candidates.length)])
+}
+
+function collectPickup(g: Game, cell: number): boolean {
+  const at = g.pickups.indexOf(cell)
+  if (at < 0) return false
+  g.pickups.splice(at, 1)
+  g.next = PICKUP_SPECIALS[randomInt(PICKUP_SPECIALS.length)]
+  if (g.effectFrame === 0) {
+    g.flash = [cell]
+    g.falling = []
+    g.blast = []
+    g.effectFrames = EFFECT_FRAMES
+    g.effectFrame = EFFECT_FRAMES
+  }
+  return true
 }
 
 // Hold: the loaded and the next bubble change places.
@@ -486,7 +566,7 @@ function floodColour(g: Game, start: number, colour: number): number[] {
   return [...seen]
 }
 
-// The cluster a landed bubble forms. A rainbow shot takes whichever
+// The cluster a landed bubble forms. A rainbow (or star) shot takes whichever
 // neighbouring colour gives the biggest cluster.
 function clusterAt(g: Game, start: number): { cells: number[]; colour: number } {
   const type = g.field[start]
@@ -537,6 +617,7 @@ function advanceWall(g: Game): void {
     g.field[idx(COLS - 1, y)] = 0
   }
   g.wallCol--
+  shiftPickups(g, -1)
 }
 
 function endGame(g: Game, won: boolean): void {
@@ -614,7 +695,13 @@ function settle(g: Game, x: number, y: number, type: number): void {
   // A star next to the landing clears every bubble of the landed colour.
   const stars: number[] = []
   forEachNeighbour(x, y, (nx, ny) => { if (g.field[idx(nx, ny)] === STAR) stars.push(idx(nx, ny)) })
-  if (stars.length && colour) {
+  if (type === BOMB) {
+    popped.add(at)
+    forEachNeighbour(x, y, (nx, ny) => { const n = idx(nx, ny); if (g.field[n] && g.field[n] !== BOMB) popped.add(n) })
+  } else if (type === STAR && colour) {
+    popped.add(at)
+    for (let c = 0; c < g.field.length; c++) if (g.field[c] === colour) popped.add(c)
+  } else if (stars.length && colour) {
     for (const s of stars) popped.add(s)
     popped.add(at)
     for (let c = 0; c < g.field.length; c++) if (g.field[c] === colour) popped.add(c)
@@ -625,6 +712,7 @@ function settle(g: Game, x: number, y: number, type: number): void {
   // caught in that goes off too.
   const bombs: number[] = []
   forEachNeighbour(x, y, (nx, ny) => { if (g.field[idx(nx, ny)] === BOMB) bombs.push(idx(nx, ny)) })
+  if (type === BOMB) bombs.push(at)
   if (bombs.length) popped.add(at)
   while (bombs.length) {
     const b = bombs.pop()!
@@ -678,6 +766,8 @@ function settle(g: Game, x: number, y: number, type: number): void {
 
   if (removed) startEffect(g, removed)
   else g.lastClear = 0
+
+  placePickup(g)
 
   if (fieldEmpty(g)) {
     g.lastLevelShots = g.shots
@@ -769,6 +859,7 @@ export function tick(g: Game): boolean {
       g.trail.push(previous)
       if (g.trail.length > 2) g.trail.shift()
     }
+    collectPickup(g, idx(cx, cy))
     if (occupied(g, cx, cy)) { settle(g, px, py, f.type); return true } // cannot happen with 8-neighbour landing; guard anyway
     if (canLand(g, cx, cy)) { settle(g, cx, cy, f.type); return true }
     px = cx; py = cy
