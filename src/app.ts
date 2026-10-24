@@ -25,7 +25,7 @@ export type Status = {
   wallIn: number
 }
 
-export type PreviewKind = 'over' | 'won' | 'title' | 'blast' | 'specials'
+export type PreviewKind = 'over' | 'won' | 'title' | 'blast' | 'specials' | 'card'
 
 export type App = {
   game: Game
@@ -345,6 +345,15 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
     if (kind === 'title') {
       invalidate()
       void showCurrentScreen().then(() => report('Ready. Tap the glasses to start.'))
+      return
+    }
+    if (kind === 'card') {
+      // The level card as it looks after clearing level 6 in 11 shots.
+      game.mode = 'classic'
+      startGame(game, { level: 7 })
+      game.score = 2310; game.lastLevelShots = 11; game.lastBonus = 180
+      invalidate()
+      void pushText(renderLevelCard(game)).then(() => report('Level 6 cleared'))
       return
     }
     if (kind === 'specials') {

@@ -102,7 +102,7 @@ async function boot(): Promise<void> {
   if (MODES.includes(mode as Mode)) app.setMode(mode as Mode)
   if (params.get('aim') === 'short') app.setHardAim(true)
   const preview = params.get('preview')
-  if (preview === 'over' || preview === 'won' || preview === 'title' || preview === 'blast' || preview === 'specials') app.preview(preview)
+  if (preview === 'over' || preview === 'won' || preview === 'title' || preview === 'blast' || preview === 'specials' || preview === 'card') app.preview(preview)
 
   $('new-game').onclick = () => app.newGame()
   $('center-aim').onclick = () => app.centerAim()

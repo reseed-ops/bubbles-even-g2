@@ -96,6 +96,19 @@ Every 8 shots the wall moves one column closer. A bubble settling in the two
 leftmost columns ends the game. Clear the field to move on to the next of
 the 100 levels.
 
+## Screenshots
+
+Captured from the Even Hub simulator, which uses the glasses' own font. The
+glasses show them in green on black at 576 × 288; these are doubled.
+
+| | |
+|---|---|
+| ![Title](screenshots/1-title.png) Title | ![Aiming](screenshots/2-classic-aim.png) Aiming in classic mode |
+| ![In flight](screenshots/3-classic-flight.png) A shot in flight | ![Pulley](screenshots/4-pulley.png) Pulley mode |
+| ![Endless](screenshots/5-endless.png) Endless mode, wave 2 | ![Puzzle](screenshots/6-puzzle.png) Puzzle mode, shots left under the launcher |
+| ![Specials](screenshots/7-specials.png) Special bubbles and a combo | ![Blast](screenshots/8-blast.png) A five-bubble clear blasting |
+| ![Level card](screenshots/9-card.png) Level card | ![Game over](screenshots/10-over.png) Game over |
+
 ## Source and licence
 
 The code lives at https://github.com/reseed-ops/bubbles-even-g2. The whole
@@ -245,7 +258,7 @@ lens; the rest of the page is grey.
 - `?preview=over` or `?preview=won`: shows the game-over screen with sample
   numbers, for checking its layout without playing to the end; `?preview=title`
   shows the title screen as a player who has reached level 7 sees it;
-  `?preview=blast` stages a five-bubble clear, fired by the next tap, to watch
+  `?preview=card` shows the level card; `?preview=blast` stages a five-bubble clear, fired by the next tap, to watch
   the blast effect; `?preview=specials` stages a star, a rainbow and a stone
   with a rainbow queued (plus a bomb, ice and a mystery, and a running combo);
   `?mode=classic|pulley|endless|puzzle` picks the mode; `?aim=short` the

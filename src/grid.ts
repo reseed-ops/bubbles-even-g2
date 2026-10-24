@@ -275,7 +275,7 @@ export function renderGameOver(g: Game): string {
     fullwidth(`${g.mode === 'endless' ? 'WAVE' : 'LEVEL'} ${g.level}`),
     fullwidth(record),
     '',
-    fullwidth('TAP: PLAY AGAIN  2 TAPS: QUIT'),
+    fullwidth('TAP: AGAIN  2 TAPS: QUIT'),
   ])
 }
 
