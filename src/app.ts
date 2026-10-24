@@ -220,9 +220,9 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
       let lastTick = Date.now()
       while (isPlaying(game)) {
         const started = Date.now()
-        if (overlayOpen) {
+        if (overlayOpen || measuring) {
           await sleep(TICK_MS)
-          lastTick = Date.now()        // time under the menu does not count
+          lastTick = Date.now()        // time under the menu or a measurement does not count
           continue
         }
         // Motion is time based: a slow push means a longer step, not a slower game.
@@ -333,18 +333,19 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
     report(on ? 'Aim guide stops at the first bounce' : 'Full aim guide')
   }
 
-  // Developer aid, from the phone page while on the title screen. Pushes the
-  // title, a one-character screen and the title with each empty cell as two
-  // ASCII spaces (two bytes instead of three), several times each, and reports
-  // the mean round trip of each. The ASCII-spaced title is left showing so
-  // the player can see whether its columns still line up.
+  // Developer aid, from the phone page at any time; a game in progress pauses
+  // while it runs. Pushes the current screen, a one-character screen and the
+  // current screen with each empty cell as two ASCII spaces (two bytes instead
+  // of three), several times each, and reports the mean round trip of each.
+  // The ASCII-spaced screen is left showing so the player can see whether its
+  // columns still line up; the next real frame replaces it.
   async function measurePush(): Promise<void> {
-    if (measuring || isPlaying(game) || !currentPage()) return
+    if (measuring || !currentPage()) return
     measuring = true
     pushCost = 'Measuring…'
     report('Measuring push cost')
     try {
-      const full = renderSplash(game)
+      const full = currentScreen()
       const ascii = full.replace(/\u3000/g, '  ')
       const tiny = 'Ａ'
       const times: Record<string, number[]> = { full: [], tiny: [], ascii: [] }
@@ -364,7 +365,7 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
       }
       const mean = (xs: number[]) => (xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : NaN)
       pushCost = `Full title ${mean(times.full)} ms, one letter ${mean(times.tiny)} ms, ASCII-spaced title ${mean(times.ascii)} ms`
-      report('Measured. The glasses now show the ASCII-spaced title: do its columns line up?')
+      report('Measured. The glasses now show the ASCII-spaced screen: do its columns line up?')
     } finally {
       measuring = false
     }
