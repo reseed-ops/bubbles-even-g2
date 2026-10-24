@@ -22,7 +22,7 @@ export type Status = {
   score: number
   best: number
   aim: number
-  wallIn: number
+  pace: { label: string; value: string }   // what the wall or shot count is doing, in this mode's terms
 }
 
 export type PreviewKind = 'over' | 'won' | 'title' | 'blast' | 'specials' | 'card'
@@ -98,8 +98,15 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
     score: game.score,
     best: game.highScore,
     aim: Math.round(aimAngle(game)),
-    wallIn: SHOTS_PER_WALL_ADVANCE - (game.shots % SHOTS_PER_WALL_ADVANCE),
+    pace: pace(),
   })
+  const shots = (n: number) => `${n} ${n === 1 ? 'shot' : 'shots'}`
+  const pace = (): { label: string; value: string } => {
+    if (!isPlaying(game)) return { label: game.mode === 'puzzle' ? 'Shots left' : game.mode === 'endless' ? 'Next wave in' : 'Wall moves in', value: '–' }
+    if (game.mode === 'puzzle') return { label: 'Shots left', value: String(Math.max(0, game.shotsLeft)) }
+    if (game.mode === 'endless') return { label: 'Next wave in', value: shots(PUSH_EVERY - (game.shots % PUSH_EVERY)) }
+    return { label: 'Wall moves in', value: shots(SHOTS_PER_WALL_ADVANCE - (game.shots % SHOTS_PER_WALL_ADVANCE)) }
+  }
   const aimText = () => {
     const deg = Math.round(aimAngle(game))
     return deg === 0 ? 'Aim centered' : `Aim ${deg > 0 ? 'up' : 'down'} ${Math.abs(deg)}°`
@@ -369,7 +376,6 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
       game.field[idx(w - 3, 7)] = MYSTERY_BASE + 2
       game.next = RAINBOW
       game.combo = 3
-      void PUSH_EVERY
       invalidate()
       void showCurrentScreen().then(() => { report('Playing'); void loop() })
       return

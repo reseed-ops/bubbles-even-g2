@@ -78,8 +78,18 @@
       .score dt, .score dd { margin: 0; }
       .score dd { color: var(--ink); font-variant-numeric: tabular-nums; }
 
-      .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 0 24px; }
-      .actions #mode { grid-column: 1 / -1; }
+      .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 0 18px; }
+
+      /* Choices: a row of joined segments, the chosen one filled. */
+      .choice { display: grid; grid-template-columns: 84px 1fr; align-items: center; gap: 12px; margin: 0 0 10px; }
+      .choice-name { color: var(--muted); }
+      .segments { display: flex; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+      .segments button { flex: 1; min-height: 40px; border: 0; border-radius: 0; border-left: 1px solid var(--line); padding: 6px 4px; font-size: 14px; }
+      .segments button:first-child { border-left: 0; }
+      .segments button[aria-pressed="true"] { background: var(--ink); color: var(--page); }
+      .segments button[aria-pressed="true"]:disabled { background: var(--line); color: var(--muted); }
+      .segments button:focus-visible { outline-offset: -3px; }
+      .choice:last-of-type { margin-bottom: 24px; }
       button {
         font: inherit; color: var(--ink);
         background: transparent; border: 1px solid var(--line); border-radius: 9px;
@@ -125,14 +135,30 @@
         <div><dt>Score</dt><dd id="score">0</dd></div>
         <div><dt>Best</dt><dd id="best">0</dd></div>
         <div><dt>Aim</dt><dd id="aim">0°</dd></div>
-        <div><dt>Wall in</dt><dd id="wall">8 shots</dd></div>
+        <div><dt id="pace-label">Wall in</dt><dd id="pace">8 shots</dd></div>
       </dl>
 
       <div class="actions">
         <button id="new-game" disabled>New game</button>
         <button id="center-aim" disabled>Center aim</button>
-        <button id="mode" disabled>Switch mode</button>
-        <button id="aim-guide" disabled>Aim guide: full</button>
+      </div>
+
+      <!-- The current choice is the filled segment; the others switch to it. -->
+      <div class="choice">
+        <span class="choice-name">Mode</span>
+        <div class="segments" role="group" aria-label="Mode">
+          <button data-mode="pulley" aria-pressed="true" disabled>Pulley</button>
+          <button data-mode="classic" aria-pressed="false" disabled>Classic</button>
+          <button data-mode="endless" aria-pressed="false" disabled>Endless</button>
+          <button data-mode="puzzle" aria-pressed="false" disabled>Puzzle</button>
+        </div>
+      </div>
+      <div class="choice">
+        <span class="choice-name">Aim guide</span>
+        <div class="segments" role="group" aria-label="Aim guide">
+          <button data-aim="full" aria-pressed="true" disabled>Full</button>
+          <button data-aim="short" aria-pressed="false" disabled>To the first bounce</button>
+        </div>
       </div>
 
       <dl class="gestures">

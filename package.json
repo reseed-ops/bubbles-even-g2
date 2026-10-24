@@ -1,7 +1,7 @@
 {
   "name": "bubbles-even-g2",
   "private": true,
-  "version": "0.3.2",
+  "version": "0.3.3",
   "type": "module",
   "scripts": {
     "dev": "sh scripts/run.sh 'vite --host 0.0.0.0 --port 5180 --strictPort'",

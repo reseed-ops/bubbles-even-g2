@@ -2,9 +2,8 @@ import { waitForEvenAppBridge } from '@evenrealities/even_hub_sdk'
 import { initApp, type App, type Status } from './app.ts'
 import { runFontTest, GLYPH_SETS } from './fonttest.ts'
 import { EMPTY } from './grid.ts'
-import { MODES, type Mode } from './game.ts'
-
-const nextMode = (mode: Mode): Mode => MODES[(MODES.indexOf(mode) + 1) % MODES.length]
+import { createGame, MODES, type Mode } from './game.ts'
+import { renderSplash } from './grid.ts'
 import { COLS, SCREEN_ROWS } from './layout.ts'
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T
@@ -67,19 +66,24 @@ function render(status: Status): void {
   $('score').textContent = status.score.toLocaleString()
   $('best').textContent = status.best.toLocaleString()
   $('aim').textContent = `${status.aim > 0 ? '+' : ''}${status.aim}°`
-  $('wall').textContent = `${status.wallIn} ${status.wallIn === 1 ? 'shot' : 'shots'}`
+  $('pace-label').textContent = status.pace.label
+  $('pace').textContent = status.pace.value
   $<HTMLButtonElement>('new-game').disabled = status.page === null
   $<HTMLButtonElement>('center-aim').disabled = status.phase !== 'play'
-  const modeButton = $<HTMLButtonElement>('mode')
-  modeButton.disabled = status.page === null
-  modeButton.textContent = `Mode: ${status.mode}. Switch to ${nextMode(status.mode)}`
-  const aimButton = $<HTMLButtonElement>('aim-guide')
-  aimButton.disabled = status.page === null
-  aimButton.textContent = `Aim guide: ${status.hardAim ? 'short, to the first bounce' : 'full'}`
+  const connected = status.page !== null
+  document.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((b) => {
+    b.disabled = !connected
+    b.setAttribute('aria-pressed', String(b.dataset.mode === status.mode))
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-aim]').forEach((b) => {
+    b.disabled = !connected
+    b.setAttribute('aria-pressed', String((b.dataset.aim === 'short') === status.hardAim))
+  })
 }
 
 async function boot(): Promise<void> {
   $('version').textContent = `v${__APP_VERSION__}`
+  drawLens(renderSplash(createGame())) // the lens is never blank, even before the glasses answer
   const params = new URLSearchParams(location.search)
   let app: App
   try {
@@ -106,8 +110,8 @@ async function boot(): Promise<void> {
 
   $('new-game').onclick = () => app.newGame()
   $('center-aim').onclick = () => app.centerAim()
-  $('mode').onclick = () => app.setMode(nextMode(app.game.mode))
-  $('aim-guide').onclick = () => app.setHardAim(!app.game.hardAim)
+  document.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((b) => { b.onclick = () => app.setMode(b.dataset.mode as Mode) })
+  document.querySelectorAll<HTMLButtonElement>('[data-aim]').forEach((b) => { b.onclick = () => app.setHardAim(b.dataset.aim === 'short') })
 }
 
 void boot()
