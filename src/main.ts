@@ -71,6 +71,7 @@ function render(status: Status): void {
   $('push-ms').textContent = status.frame ? `${status.frame.ms} ms` : '–'
   $('fps').textContent = status.frame ? `${status.frame.fps}/s` : '–'
   $('skipped').textContent = status.frame ? `${Math.round(status.frame.skipped * 100)}%` : '–'
+  $('push-cost').textContent = status.pushCost ?? 'Not measured yet. Run it from the title screen.'
   $<HTMLButtonElement>('new-game').disabled = status.page === null
   $<HTMLButtonElement>('center-aim').disabled = status.phase !== 'play'
   $<HTMLButtonElement>('measure').disabled = status.page === null || status.phase === 'play'

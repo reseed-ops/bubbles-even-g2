@@ -31,6 +31,7 @@ export type Status = {
   pace: { label: string; value: string }   // what the wall or shot count is doing, in this mode's terms
   frame: FrameMeter | null  // measured BLE push round trip and frames per second, null until the first push
   pipelined: boolean        // more than one glasses update may be in flight
+  pushCost: string | null   // result of the last push-cost measurement, kept until the next run
 }
 
 export type PreviewKind = 'over' | 'won' | 'title' | 'blast' | 'specials' | 'card'
@@ -65,6 +66,7 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
   let levelCardTap: (() => void) | null = null
   let continueOffered = false        // game over, with the second chance on the table
   let measuring = false              // push-cost test running on the title screen
+  let pushCost: string | null = null
 
   async function loadHighScore(): Promise<void> {
     try {
@@ -126,6 +128,7 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
     pace: pace(),
     frame: frameMeter(),
     pipelined: pipelined(),
+    pushCost,
   })
   const shots = (n: number) => `${n} ${n === 1 ? 'shot' : 'shots'}`
   const pace = (): { label: string; value: string } => {
@@ -338,6 +341,8 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
   async function measurePush(): Promise<void> {
     if (measuring || isPlaying(game) || !currentPage()) return
     measuring = true
+    pushCost = 'Measuring…'
+    report('Measuring push cost')
     try {
       const full = renderSplash(game)
       const ascii = full.replace(/\u3000/g, '  ')
@@ -358,7 +363,8 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
         await timed('ascii', ascii)
       }
       const mean = (xs: number[]) => (xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : NaN)
-      report(`Push cost: full ${mean(times.full)} ms, one letter ${mean(times.tiny)} ms, ASCII spaces ${mean(times.ascii)} ms. Glasses now show the ASCII-spaced title.`)
+      pushCost = `Full title ${mean(times.full)} ms, one letter ${mean(times.tiny)} ms, ASCII-spaced title ${mean(times.ascii)} ms`
+      report('Measured. The glasses now show the ASCII-spaced title: do its columns line up?')
     } finally {
       measuring = false
     }
