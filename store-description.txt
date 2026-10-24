@@ -1,0 +1,11 @@
+A sideways bubble shooter for Even G2: Frozen Bubble's 100 levels, turned so the bubbles hang off the right edge, played with the touchpad.
+
+Swipe up or down to aim (each swipe moves to the next spot the bubble can land), tap to shoot, hold to swap the loaded bubble with the next. Three or more of a kind pop; anything left hanging falls and pays extra. Every eight shots the wall moves in, and it hurries you if you dither.
+
+Four modes: Pulley (default), where two groups hang from one axle and the heavier side swings toward you; Classic; Endless, where a fresh column pushes in every six shots; and Puzzle, a shot limit per level with no clock. Each keeps its own best score.
+
+Special bubbles from level 3: stars clear a colour, rainbows join any colour, bombs blow away their neighbours, ice takes two pops, stones only fall, and mystery bubbles hide their colour. Consecutive scoring shots build a combo up to x5. Start from any level you have reached.
+
+The phone page mirrors the glasses, shows your score, and explains every glyph.
+
+Free software under the GPL-2.0 (the levels are Frozen Bubble's). Source: https://github.com/reseed-ops/bubbles-even-g2

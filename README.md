@@ -96,6 +96,12 @@ Every 8 shots the wall moves one column closer. A bubble settling in the two
 leftmost columns ends the game. Clear the field to move on to the next of
 the 100 levels.
 
+## Source and licence
+
+The code lives at https://github.com/reseed-ops/bubbles-even-g2. The whole
+project is GPL-2.0 because the level data is Frozen Bubble's (below); `LICENSE`
+is the full text. Issues and pull requests are welcome there.
+
 ## Levels
 
 The layouts are the 100 original Frozen Bubble levels (`levels/`), rotated
@@ -164,6 +170,8 @@ double-tap reserved for the required system exit dialog.
 | `src/main.ts`, `index.html` | The phone page: a live mirror of the glasses, status, score and controls. |
 | `test/game.test.js` | Logic tests: popping, dropping, aim prediction, all 100 levels, random games. |
 | `app.json` | Even Hub manifest. |
+| `store-description.txt` | The Even Hub listing text; `evenhub update --description-file` uploads it. |
+| `public/icon.png` | 24 × 24 icon drawn in 2 × 2 blocks, as the glasses show it. |
 
 ## Running
 
