@@ -68,6 +68,8 @@ function render(status: Status): void {
   $('aim').textContent = `${status.aim > 0 ? '+' : ''}${status.aim}°`
   $('pace-label').textContent = status.pace.label
   $('pace').textContent = status.pace.value
+  $('push-ms').textContent = status.frame ? `${status.frame.ms} ms` : '–'
+  $('fps').textContent = status.frame ? `${status.frame.fps}/s` : '–'
   $<HTMLButtonElement>('new-game').disabled = status.page === null
   $<HTMLButtonElement>('center-aim').disabled = status.phase !== 'play'
   const connected = status.page !== null
@@ -82,6 +84,10 @@ function render(status: Status): void {
   document.querySelectorAll<HTMLButtonElement>('[data-difficulty]').forEach((b) => {
     b.disabled = !connected
     b.setAttribute('aria-pressed', String(b.dataset.difficulty === status.difficulty))
+  })
+  document.querySelectorAll<HTMLButtonElement>('[data-pipeline]').forEach((b) => {
+    b.disabled = !connected
+    b.setAttribute('aria-pressed', String((b.dataset.pipeline === 'on') === status.pipelined))
   })
   const levelInput = $<HTMLInputElement>('start-level')
   levelInput.disabled = !connected || status.phase === 'play' || status.mode === 'endless'
@@ -134,6 +140,7 @@ async function boot(): Promise<void> {
   document.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((b) => { b.onclick = () => app.setMode(b.dataset.mode as Mode) })
   document.querySelectorAll<HTMLButtonElement>('[data-aim]').forEach((b) => { b.onclick = () => app.setHardAim(b.dataset.aim === 'short') })
   document.querySelectorAll<HTMLButtonElement>('[data-difficulty]').forEach((b) => { b.onclick = () => app.setDifficulty(b.dataset.difficulty as Difficulty) })
+  document.querySelectorAll<HTMLButtonElement>('[data-pipeline]').forEach((b) => { b.onclick = () => app.setPipelined(b.dataset.pipeline === 'on') })
   const levelInput = $<HTMLInputElement>('start-level')
   levelInput.onchange = () => app.setStartLevel(Number(levelInput.value))
 }

@@ -2,7 +2,7 @@ import type { EvenAppBridge } from '@evenrealities/even_hub_sdk'
 import { BOMB, FROZEN, MAX_LEVEL, MYSTERY_BASE, RAINBOW, SHOOTER_Y, STAR, STONE, SWIPE_AIM_DEG, TICK_MS } from './layout.ts'
 import { aimAngle, chooseStartLevel, continueGame, createGame, emptyStats, fire, idx, isOver, isPlaying, nudgeToNextLanding, paceEvery, setAim, skipLevel, startGame, swapBubbles, tick, DIFFICULTIES, MODES, type Difficulty, type Game, type Mode, type Phase, type Stats } from './game.ts'
 import { modeName, renderFireworks, renderGameOver, renderGrid, renderLevelCard, renderSplash } from './grid.ts'
-import { currentPage, invalidate, pushScreen, showPage, type PageKind } from './renderer.ts'
+import { currentPage, frameMeter, invalidate, pipelined, pushScreen, setPipelined, showPage, type FrameMeter, type PageKind } from './renderer.ts'
 import { toInput, type Input } from './events.ts'
 
 const HIGH_SCORE_KEY = 'bubbles_high_score'  // classic; other modes append _<mode>
@@ -11,6 +11,7 @@ const MODE_KEY = 'bubbles_mode'
 const HARD_AIM_KEY = 'bubbles_hard_aim'
 const DIFFICULTY_KEY = 'bubbles_difficulty'
 const STATS_KEY = 'bubbles_stats'
+const PIPELINE_KEY = 'bubbles_pipeline'    // '0' waits for each glasses update before sending the next
 const highScoreKey = (mode: Mode) => (mode === 'classic' ? HIGH_SCORE_KEY : `${HIGH_SCORE_KEY}_${mode}`)
 
 export type Status = {
@@ -28,6 +29,8 @@ export type Status = {
   best: number
   aim: number
   pace: { label: string; value: string }   // what the wall or shot count is doing, in this mode's terms
+  frame: FrameMeter | null  // measured BLE push round trip and frames per second, null until the first push
+  pipelined: boolean        // more than one glasses update may be in flight
 }
 
 export type PreviewKind = 'over' | 'won' | 'title' | 'blast' | 'specials' | 'card'
@@ -40,6 +43,7 @@ export type App = {
   setHardAim: (on: boolean) => void
   setDifficulty: (d: Difficulty) => void
   setStartLevel: (level: number) => void
+  setPipelined: (on: boolean) => void
   preview: (kind: PreviewKind) => void   // developer aid: shows an end screen with sample numbers
   status: () => Status
 }
@@ -81,6 +85,7 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
     const savedMode = await bridge.getLocalStorage(MODE_KEY)
     if (MODES.includes(savedMode as Mode)) game.mode = savedMode as Mode
     game.hardAim = (await bridge.getLocalStorage(HARD_AIM_KEY)) === '1'
+    setPipelined((await bridge.getLocalStorage(PIPELINE_KEY)) !== '0')
   } catch { /* phone-side storage is optional */ }
   await loadHighScore()
 
@@ -117,6 +122,8 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
     best: game.highScore,
     aim: Math.round(aimAngle(game)),
     pace: pace(),
+    frame: frameMeter(),
+    pipelined: pipelined(),
   })
   const shots = (n: number) => `${n} ${n === 1 ? 'shot' : 'shots'}`
   const pace = (): { label: string; value: string } => {
@@ -218,7 +225,11 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
           saveStats()
           if (isPlaying(game)) await showLevelUp()
         }
-        if (changed || screenDirty) await pushPlayScreen()
+        if (changed || screenDirty) {
+          // Pipelined: the push runs alongside the next tick instead of pacing it.
+          const push = pushPlayScreen()
+          if (!pipelined()) await push
+        }
         if (isOver(game)) {
           saveHighScore()
           saveProgress()
@@ -310,6 +321,13 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
     screenDirty = true
     if (!isPlaying(game)) { invalidate(); void showCurrentScreen() }
     report(on ? 'Aim guide stops at the first bounce' : 'Full aim guide')
+  }
+
+  function setPipelinedUpdates(on: boolean): void {
+    if (pipelined() === on) return
+    setPipelined(on)
+    void bridge.setLocalStorage(PIPELINE_KEY, on ? '1' : '0').catch(() => {})
+    report(on ? 'Glasses updates pipelined' : 'Glasses updates one at a time')
   }
 
   async function takeContinue(): Promise<void> {
@@ -477,6 +495,7 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
     setHardAim,
     setDifficulty,
     setStartLevel,
+    setPipelined: setPipelinedUpdates,
     preview,
     status,
   }

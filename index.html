@@ -148,6 +148,8 @@
         <div><dt>Best</dt><dd id="best">0</dd></div>
         <div><dt>Aim</dt><dd id="aim">0°</dd></div>
         <div><dt id="pace-label">Wall in</dt><dd id="pace">8 shots</dd></div>
+        <div><dt>Push</dt><dd id="push-ms">–</dd></div>
+        <div><dt>Frames</dt><dd id="fps">–</dd></div>
       </dl>
 
       <div class="actions">
@@ -185,6 +187,13 @@
         <div class="segments" role="group" aria-label="Aim guide">
           <button data-aim="full" aria-pressed="true" disabled>Full</button>
           <button data-aim="short" aria-pressed="false" disabled>To the first bounce</button>
+        </div>
+      </div>
+      <div class="choice">
+        <span class="choice-name">Glasses updates</span>
+        <div class="segments" role="group" aria-label="Glasses updates">
+          <button data-pipeline="on" aria-pressed="true" disabled>Pipelined</button>
+          <button data-pipeline="off" aria-pressed="false" disabled>One at a time</button>
         </div>
       </div>
 

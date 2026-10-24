@@ -302,6 +302,12 @@ lens; the rest of the page is grey.
 
 ## Known limits
 
-- Frame rate is bounded by the BLE text-update path. If an update is already in
-  flight, a redundant intermediate frame is skipped so controls stay responsive.
+- Frame rate is bounded by the BLE text-update path. By default updates are
+  pipelined: the game ticks on its own clock and lets up to two pushes be in
+  flight, so the display rate is set by how fast the glasses accept text rather
+  than by round-trip latency. If both slots are busy a frame is skipped; the
+  next tick sends the newest whole screen, so nothing stale is queued. The phone
+  page shows the measured push round trip and frames per second, and a
+  "Glasses updates" switch falls back to one push at a time if frames ever
+  arrive out of order.
 - The font is proportional. Only glyphs measured as one cell wide may go in the grid; see the font test page.

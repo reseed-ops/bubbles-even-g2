@@ -2,7 +2,7 @@
   "package_id": "net.reseed.bubbles",
   "edition": "202601",
   "name": "Bubbles",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Sideways Frozen Bubble / Bust-A-Move style game for Even G2. Swipe to aim, tap to shoot. Four modes, special bubbles, 100 levels. GPL-2.0, source: https://github.com/reseed-ops/bubbles-even-g2",
   "tagline": "Swipe to aim, tap to shoot",
   "min_app_version": "2.2.10",
