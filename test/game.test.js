@@ -499,20 +499,6 @@ test('lifetime stats accumulate', () => {
   assert.equal(g.stats.games, 2, 'stats persist across games on the same object')
 })
 
-test('the short aim guide stops at the first bounce', () => {
-  const g = classic(); startGame(g)
-  g.field.fill(0); g.field[idx(g.wallCol, 0)] = 1
-  setAim(g, 45)
-  const full = renderGrid(g)
-  g.hardAim = true
-  const short = renderGrid(g)
-  const count = (text, glyph) => [...text].filter((c) => c === glyph).length
-  assert.ok(count(short, '／') + count(short, '＼') < count(full, '／') + count(full, '＼'), 'fewer line cells')
-  assert.ok(!short.includes('◌'), 'no landing marker on the short guide')
-  assert.ok(!short.includes('＼'), 'nothing drawn after the bounce')
-  assert.equal(aimPath(g).length > 0, true, 'the real path is unchanged')
-})
-
 test('pulley mode: the heavier group hangs closer and shifting drops what it tears loose', () => {
   const g = createGame(); g.mode = 'pulley'; startGame(g)
   assert.ok(g.field.subarray(SHOOTER_Y * COLS, (SHOOTER_Y + 1) * COLS).every((t) => t === 0), 'the axle row starts clear')

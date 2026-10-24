@@ -79,7 +79,6 @@ export type Game = {
   next2: number            // and the one after that
   combo: number            // consecutive shots that removed something; multiplies the score
   shotsLeft: number        // puzzle mode: shots before the level is lost; -1 elsewhere
-  hardAim: boolean         // show the aim guide only up to its first bounce
   justCleared: boolean     // the last shot emptied the board (consumed by the app)
   pickups: number[]        // cells holding a ＋; fly through one to load a special
   continues: number        // second chances left this game
@@ -137,7 +136,6 @@ export function createGame(): Game {
     next2: 3,
     combo: 0,
     shotsLeft: -1,
-    hardAim: false,
     justCleared: false,
     pickups: [],
     continues: CONTINUES,

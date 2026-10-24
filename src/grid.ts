@@ -37,23 +37,6 @@ void BOMB; void FROZEN; void CRACKED
 const FLAT_DEG = 12
 const UPRIGHT_DEG = 58
 
-// With the short guide, the line stops where it would first bounce.
-function shownPath(g: Game, path: number[]): number[] {
-  if (!g.hardAim) return path
-  let previousRow = SHOOTER_Y
-  let direction = 0
-  for (let i = 0; i < path.length; i++) {
-    const row = Math.floor(path[i] / COLS)
-    const d = Math.sign(row - previousRow)
-    if (d !== 0) {
-      if (direction !== 0 && d !== direction) return path.slice(0, i)
-      direction = d
-    }
-    previousRow = row
-  }
-  return path
-}
-
 function aimGlyphs(g: Game, path: number[]): string[] {
   const deg = aimAngle(g)
   const size = Math.abs(deg)
@@ -151,11 +134,10 @@ function gridCells(g: Game, overlay?: string): string[] {
   // The aim line stays up during a flight so the next shot can be lined up
   // while this one travels. It predicts against the board as it is now.
   {
-    const full = aimPath(g)
-    const path = shownPath(g, full)
+    const path = aimPath(g)
     const glyphs = aimGlyphs(g, path)
     path.forEach((c, i) => { cells[c] = glyphs[i] })
-    if (path.length && path.length === full.length) cells[path[path.length - 1]] = TARGET
+    if (path.length) cells[path[path.length - 1]] = TARGET
   }
   for (const c of g.pickups) cells[c] = PICKUP
   const age = g.effectFrame > 0 ? Math.floor(g.effectFrames - g.effectFrame) : 0

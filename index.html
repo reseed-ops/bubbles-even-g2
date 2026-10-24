@@ -79,8 +79,12 @@
       .score dd { color: var(--ink); font-variant-numeric: tabular-nums; }
 
       .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 0 18px; }
-      .actions .wide { grid-column: 1 / -1; }
-      .actions p { margin: -2px 0 0; font-size: 14px; }
+      .diagnostics { margin: 28px 0 0; border-top: 1px solid var(--line); padding-top: 12px; }
+      .diagnostics summary { color: var(--muted); cursor: pointer; }
+      .diagnostics summary:focus-visible { outline-offset: 2px; }
+      .diagnostics .score { margin: 12px 0; }
+      .diagnostics button { width: 100%; }
+      .diagnostics p { margin: 8px 0 0; font-size: 14px; }
 
       /* Choices: a row of joined segments, the chosen one filled. */
       .choice { display: grid; grid-template-columns: 84px 1fr; align-items: center; gap: 12px; margin: 0 0 10px; }
@@ -150,16 +154,11 @@
         <div><dt>Best</dt><dd id="best">0</dd></div>
         <div><dt>Aim</dt><dd id="aim">0°</dd></div>
         <div><dt id="pace-label">Wall in</dt><dd id="pace">8 shots</dd></div>
-        <div><dt>Push</dt><dd id="push-ms">–</dd></div>
-        <div><dt>Frames</dt><dd id="fps">–</dd></div>
-        <div><dt>Skipped</dt><dd id="skipped">–</dd></div>
       </dl>
 
       <div class="actions">
         <button id="new-game" disabled>New game</button>
         <button id="center-aim" disabled>Center aim</button>
-        <button id="measure" class="wide" disabled>Measure push cost</button>
-        <p id="push-cost" class="muted wide">Not measured yet. A game in progress pauses while it runs.</p>
       </div>
 
       <!-- The current choice is the filled segment; the others switch to it. -->
@@ -187,26 +186,12 @@
           <span id="level-reached" class="muted">of 1 reached</span>
         </div>
       </div>
-      <div class="choice">
-        <span class="choice-name">Aim guide</span>
-        <div class="segments" role="group" aria-label="Aim guide">
-          <button data-aim="full" aria-pressed="true" disabled>Full</button>
-          <button data-aim="short" aria-pressed="false" disabled>To the first bounce</button>
-        </div>
-      </div>
-      <div class="choice">
-        <span class="choice-name">Glasses updates</span>
-        <div class="segments" role="group" aria-label="Glasses updates">
-          <button data-pipeline="off" aria-pressed="true" disabled>One at a time</button>
-          <button data-pipeline="on" aria-pressed="false" disabled>Pipelined</button>
-        </div>
-      </div>
 
       <dl class="gestures">
         <dt>Swipe up or down</dt><dd>Aim at the next landing spot</dd>
         <dt>Tap</dt><dd>Shoot</dd>
         <dt>Hold</dt><dd>Swap the loaded and next bubbles</dd>
-        <dt>Tap, then hold</dt><dd>Open the menu: restart, center the aim, mode, aim guide</dd>
+        <dt>Tap, then hold</dt><dd>Open the menu: restart, center the aim, mode, difficulty</dd>
         <dt>Tap in flight</dt><dd>Queue the next shot</dd>
         <dt>Double tap</dt><dd>Quit</dd>
       </dl>
@@ -234,6 +219,19 @@
         <dt>＋</dt><dd>Pickup. Fly a shot through it to load a rainbow, bomb or star as your next bubble.</dd>
         <dt>Ｘ３</dt><dd>Combo. Shots that keep removing something pay double, triple, up to five times.</dd>
       </dl>
+
+      <!-- Developer readouts: how long each glasses update takes and a test
+           that times a few probe screens. Closed by default. -->
+      <details class="diagnostics">
+        <summary>Diagnostics</summary>
+        <dl class="score">
+          <div><dt>Push</dt><dd id="push-ms">–</dd></div>
+          <div><dt>Frames</dt><dd id="fps">–</dd></div>
+          <div><dt>Skipped</dt><dd id="skipped">–</dd></div>
+        </dl>
+        <button id="measure" disabled>Measure push cost</button>
+        <p id="push-cost" class="muted">Not measured yet. A game in progress pauses while it runs.</p>
+      </details>
     </main>
     <script type="module" src="/src/main.ts"></script>
   </body>

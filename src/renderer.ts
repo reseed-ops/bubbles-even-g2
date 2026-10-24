@@ -22,16 +22,14 @@ const GAME_MENU = new MenuContainerProperty({
     new MenuItemProperty({ itemName: 'Pulley mode', itemID: 4 }),
     new MenuItemProperty({ itemName: 'Endless mode', itemID: 5 }),
     new MenuItemProperty({ itemName: 'Puzzle mode', itemID: 6 }),
-    new MenuItemProperty({ itemName: 'Aim guide: full or short', itemID: 7 }),
-    new MenuItemProperty({ itemName: 'Difficulty: easy, normal, hard', itemID: 8 }),
+    new MenuItemProperty({ itemName: 'Difficulty: easy, normal, hard', itemID: 7 }),
   ],
 })
 
 let created = false
 let lastText = ''
-let inFlight = 0
-let maxInFlight = 1              // measured on G2 glasses 2026-10-24: one push at a time gave 5.9 fps with no drops;
-                                 // two in flight gave 4.7 fps, longer round trips and 19% dropped frames
+let inFlight = 0                 // the glasses accept one update at a time: measured on G2 2026-10-24, a
+                                 // second push in flight only queued behind the first and dropped frames
 
 // Frame meter: every acknowledged push records when it finished and how long
 // the round trip took, so the phone page can show the real BLE frame rate.
@@ -73,14 +71,6 @@ export async function whenIdle(timeoutMs = 2000): Promise<void> {
   while (inFlight > 0 && Date.now() < until) await new Promise<void>((r) => setTimeout(r, 5))
 }
 
-export function setPipelined(on: boolean): void {
-  maxInFlight = on ? 2 : 1
-}
-
-export function pipelined(): boolean {
-  return maxInFlight > 1
-}
-
 export function currentPage(): PageKind | null {
   return created ? 'text' : null
 }
@@ -120,20 +110,18 @@ export async function showPage(bridge: EvenAppBridge, text: string): Promise<boo
   return ok
 }
 
-// A frame that arrives while BLE is saturated is dropped instead of queued. The
-// next game tick carries the latest state, keeping input and animation lively.
-// Pipelining (two pushes in flight, the loop not waiting for acknowledgement)
-// is available from the phone page but off by default: the glasses accept
-// one update at a time, so a second push only queues behind the first.
+// A frame that arrives while a push is in flight is dropped instead of queued.
+// The next game tick carries the latest state, keeping input and animation
+// lively.
 //
 // Every push sends the whole screen. contentOffset/contentLength are not a
 // splice: the simulator shows only the text sent, drawn from the top, so a
 // changed-span update leaves the rest of the display blank.
 export async function pushScreen(bridge: EvenAppBridge, content: string): Promise<boolean> {
   if (!created || content === lastText) return false
-  if (inFlight >= maxInFlight) { skips.push(Date.now()); return false }
+  if (inFlight > 0) { skips.push(Date.now()); return false }
   inFlight++
-  lastText = content   // claimed on send so a pipelined follow-up is not a duplicate
+  lastText = content   // claimed on send so the same frame is never sent twice
   const started = Date.now()
   try {
     const ok = await bridge.textContainerUpgrade(new TextContainerUpgrade({

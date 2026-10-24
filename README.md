@@ -10,7 +10,7 @@ edge, and the touchpad.
 - **Tap, then hold** to open the G2 contextual menu, where you can restart or center the aim.
 - **Double tap** to open the G2 system exit confirmation from any screen.
 - **Tap, then hold** also switches mode (classic, pulley, endless, puzzle) and
-  toggles the aim guide between full and short (stops at the first bounce).
+  cycles the difficulty.
 - **Swipe on the title or game-over screen** to pick the level to start on, up to
   the highest level you have reached. A returning player starts where they got
   to; after a game over, "play again" continues on the same level. Starting
@@ -297,24 +297,24 @@ lens; the rest of the page is grey.
   `?preview=card` shows the level card; `?preview=blast` stages a five-bubble clear, fired by the next tap, to watch
   the blast effect; `?preview=specials` stages a star, a rainbow and a stone
   with a rainbow queued (plus a bomb, ice and a mystery, and a running combo);
-  `?mode=classic|pulley|endless|puzzle` picks the mode; `?aim=short` the
-  short aim guide; `?level=137` unlocks and picks a start level; `?preview=over` shows the game over with the continue offer.
+  `?mode=classic|pulley|endless|puzzle` picks the mode; `?level=137` unlocks
+  and picks a start level; `?preview=over` shows the game over with the
+  continue offer; `?measure=1` runs the push-cost measurement once connected.
 
 ## Known limits
 
 - Frame rate is bounded by the BLE text-update path. Measured on G2 glasses
-  (October 2026), a whole-screen push takes about 156 ms from send to
+  (October 2026), a whole-screen push takes 110 to 170 ms from send to
   acknowledgement and the glasses accept one at a time, so the game displays
-  about 6 frames per second. Letting two pushes be in flight made it worse:
-  longer round trips, 19% dropped frames, 4.7 frames per second. The default is
-  therefore one push at a time, with the loop waiting for each. The phone page
-  shows the measured push round trip, the frames per second actually displayed
-  while something was moving, the share of frames skipped, and a
-  "Glasses updates" switch to try pipelining on other firmware. A "Measure
-  push cost" button on the phone page times the current screen, a one-letter
-  screen and the title with every empty cell sent as two ASCII spaces (two
-  bytes instead of the three of U+3000), to show whether bytes or rendering set
-  the push time. It can be run mid-game; the game pauses while it runs.
+  6 to 9 frames per second. Probes showed the cost is a fixed per-push part
+  (55 to 108 ms, varying by session) plus about 65 ms to refresh the display
+  area: a blank grid, a grid of 280 dots and a real board all cost the same,
+  and a third fewer bytes changed nothing, so payload tricks do not help.
+  Letting two pushes be in flight made it worse (19% dropped frames), so the
+  loop waits for each push. The phone page has a Diagnostics fold with the
+  measured push time, frames per second and skipped share, and a "Measure
+  push cost" button that times six probe screens; a game in progress pauses
+  while it runs.
 - Motion is time based. The loop passes the real time elapsed since the last
   tick, in units of `TICK_MS` (100 ms), so a shot covers the same distance per
   second at 6 frames per second as it would at 12. A stall longer than three

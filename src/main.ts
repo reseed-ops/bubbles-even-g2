@@ -80,17 +80,9 @@ function render(status: Status): void {
     b.disabled = !connected
     b.setAttribute('aria-pressed', String(b.dataset.mode === status.mode))
   })
-  document.querySelectorAll<HTMLButtonElement>('[data-aim]').forEach((b) => {
-    b.disabled = !connected
-    b.setAttribute('aria-pressed', String((b.dataset.aim === 'short') === status.hardAim))
-  })
   document.querySelectorAll<HTMLButtonElement>('[data-difficulty]').forEach((b) => {
     b.disabled = !connected
     b.setAttribute('aria-pressed', String(b.dataset.difficulty === status.difficulty))
-  })
-  document.querySelectorAll<HTMLButtonElement>('[data-pipeline]').forEach((b) => {
-    b.disabled = !connected
-    b.setAttribute('aria-pressed', String((b.dataset.pipeline === 'on') === status.pipelined))
   })
   const levelInput = $<HTMLInputElement>('start-level')
   levelInput.disabled = !connected || status.phase === 'play' || status.mode === 'endless'
@@ -132,7 +124,6 @@ async function boot(): Promise<void> {
 
   const mode = params.get('mode')
   if (MODES.includes(mode as Mode)) app.setMode(mode as Mode)
-  if (params.get('aim') === 'short') app.setHardAim(true)
   const level = Number(params.get('level'))   // developer aid: unlock and pick a start level
   if (level > 1) { app.game.levelReached = Math.max(app.game.levelReached, level); app.setStartLevel(level) }
   if (params.get('measure') === '1') setTimeout(() => app.measurePush(), 1500)   // developer aid: run the push-cost test once connected
@@ -143,9 +134,7 @@ async function boot(): Promise<void> {
   $('center-aim').onclick = () => app.centerAim()
   $('measure').onclick = () => app.measurePush()
   document.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((b) => { b.onclick = () => app.setMode(b.dataset.mode as Mode) })
-  document.querySelectorAll<HTMLButtonElement>('[data-aim]').forEach((b) => { b.onclick = () => app.setHardAim(b.dataset.aim === 'short') })
   document.querySelectorAll<HTMLButtonElement>('[data-difficulty]').forEach((b) => { b.onclick = () => app.setDifficulty(b.dataset.difficulty as Difficulty) })
-  document.querySelectorAll<HTMLButtonElement>('[data-pipeline]').forEach((b) => { b.onclick = () => app.setPipelined(b.dataset.pipeline === 'on') })
   const levelInput = $<HTMLInputElement>('start-level')
   levelInput.onchange = () => app.setStartLevel(Number(levelInput.value))
 }
