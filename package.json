@@ -1,0 +1,26 @@
+{
+  "name": "bubbles-even-g2",
+  "private": true,
+  "version": "0.3.0",
+  "type": "module",
+  "scripts": {
+    "dev": "sh scripts/run.sh 'vite --host 0.0.0.0 --port 5180 --strictPort'",
+    "build": "sh scripts/run.sh 'tsc --noEmit && vite build'",
+    "preview": "sh scripts/run.sh 'vite preview'",
+    "qr": "sh scripts/run.sh 'evenhub qr --http --port 5180'",
+    "simulate": "sh scripts/run.sh 'evenhub-simulator http://localhost:5180'",
+    "simulate:headless": "sh scripts/run.sh 'sh scripts/simulator.sh http://localhost:5180'",
+    "pack": "sh scripts/run.sh 'tsc --noEmit && vite build && evenhub pack app.json dist -o bubbles.ehpk'",
+    "test": "node --test test/*.test.js",
+    "setup": "sh scripts/dev-env.sh"
+  },
+  "dependencies": {
+    "@evenrealities/even_hub_sdk": "^0.0.16"
+  },
+  "devDependencies": {
+    "@evenrealities/evenhub-cli": "^0.2.0",
+    "@evenrealities/evenhub-simulator": "^0.9.5",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1"
+  }
+}

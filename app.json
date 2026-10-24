@@ -1,0 +1,13 @@
+{
+  "package_id": "com.tmh.bubbles",
+  "edition": "202601",
+  "name": "Bubbles",
+  "version": "0.3.0",
+  "description": "Minimal sideways bubble shooter for Even G2. Swipe to aim, tap to shoot.",
+  "tagline": "Swipe to aim, tap to shoot",
+  "min_app_version": "2.2.10",
+  "min_sdk_version": "0.0.14",
+  "entrypoint": "index.html",
+  "permissions": [],
+  "supported_languages": ["en"]
+}
