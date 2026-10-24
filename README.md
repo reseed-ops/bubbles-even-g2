@@ -109,6 +109,12 @@ glasses show them in green on black at 576 × 288; these are doubled.
 | ![Specials](screenshots/7-specials.png) Special bubbles and a combo | ![Blast](screenshots/8-blast.png) A five-bubble clear blasting |
 | ![Level card](screenshots/9-card.png) Level card | ![Game over](screenshots/10-over.png) Game over |
 
+## Privacy
+
+The app collects nothing and makes no network requests; it stores your best
+scores, level reached and two settings through the Even app's local storage on
+your phone. See `PRIVACY.md`.
+
 ## Source and licence
 
 The code lives at https://github.com/reseed-ops/bubbles-even-g2. The whole
