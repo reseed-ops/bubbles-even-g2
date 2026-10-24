@@ -405,7 +405,7 @@ test('one continue per game clears the nearest columns and makes the run unranke
   g.score = 500; g.highScore = 100
   g.field.fill(0)
   for (let x = 2; x <= g.wallCol; x++) g.field[idx(x, SHOOTER_Y + 1)] = 7
-  g.field[idx(2, SHOOTER_Y + 1)] = 7 // in the loss zone's edge column: any settle ends the game
+  g.field[idx(1, SHOOTER_Y + 1)] = 7 // inside the loss zone: the shot stops alongside it and the game ends
   g.loaded = 8; shoot(g, 0)
   assert.equal(g.phase, 'over')
   assert.equal(g.highScore, 500, 'the best is recorded at the first death')
@@ -849,4 +849,13 @@ test('tick scales motion, effects and the hurry clock by elapsed time', () => {
   const d = classic(); d.mode = 'pulley'; startGame(d)
   tick(d, 2.5)
   assert.equal(d.idleTicks, 2.5, 'the hurry-up clock advances by elapsed ticks')
+})
+
+test('a shot slides past a diagonal corner and stops only on head-on or side contact', () => {
+  const g = classic(); startGame(g)
+  g.field.fill(0)
+  for (let x = 10; x <= g.wallCol; x++) g.field[idx(x, SHOOTER_Y - 1)] = 2   // a row hanging one above the shooter row
+  g.loaded = 1; shoot(g, 0)
+  assert.equal(g.field[idx(9, SHOOTER_Y)], 0, 'the corner of the first bubble does not catch the shot')
+  assert.equal(g.field[idx(10, SHOOTER_Y)], 1, 'it stops once it is directly alongside')
 })

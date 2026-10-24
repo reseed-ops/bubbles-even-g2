@@ -15,11 +15,15 @@ import {
 } from './layout.ts'
 import { LEVELS, LEVEL_DEPTH } from './levels.ts'
 
-// Bubbles touch on all eight sides. The levels come from a hex grid snapped
-// onto squares, and 8-neighbour adjacency keeps every original contact.
+// Bubbles hang and match on all eight sides. The levels come from a hex grid
+// snapped onto squares, and 8-neighbour adjacency keeps every original contact.
 const NEIGHBOURS: ReadonlyArray<readonly [number, number]> = [
   [1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1],
 ]
+// A flying bubble stops only on real contact. Diagonal cells are 1.4 diameters
+// apart, so a shot slides past a corner and goes on until it meets a bubble
+// head-on or alongside.
+const CONTACT: ReadonlyArray<readonly [number, number]> = [[1, 0], [-1, 0], [0, 1], [0, -1]]
 
 function forEachNeighbour(x: number, y: number, fn: (nx: number, ny: number) => void): void {
   for (const [dx, dy] of NEIGHBOURS) {
@@ -354,6 +358,12 @@ function pushColumn(g: Game): void {
     else if (g.level >= 2 && Math.random() < 0.08) t = MYSTERY_BASE + t
     g.field[idx(g.wallCol, y)] = t
   }
+  // A gap in the new column can leave a bubble with nothing to hang from
+  // once its only support was a diagonal neighbour: it falls, unscored.
+  if (dropDetached(g) > 0 && g.effectFrame === 0) {
+    g.effectFrames = EFFECT_FRAMES
+    g.effectFrame = EFFECT_FRAMES
+  }
   g.level++ // a wave
 }
 
@@ -582,9 +592,11 @@ function direction(g: Game): { vx: number; vy: number } {
 // any bubble around it.
 function canLand(g: Game, x: number, y: number): boolean {
   if (x >= wallFor(g, y)) return true
-  let touching = false
-  forEachNeighbour(x, y, (nx, ny) => { if (g.field[idx(nx, ny)]) touching = true })
-  return touching
+  for (const [dx, dy] of CONTACT) {
+    const nx = x + dx, ny = y + dy
+    if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && g.field[idx(nx, ny)]) return true
+  }
+  return false
 }
 
 // The next bubble moves into the shooter as soon as a shot leaves, so the aim
@@ -948,7 +960,7 @@ export function tick(g: Game, dt = 1): boolean {
       if (g.trail.length > 3) g.trail.shift()
     }
     collectPickup(g, idx(cx, cy))
-    if (occupied(g, cx, cy)) { settle(g, px, py, f.type); return true } // cannot happen with 8-neighbour landing; guard anyway
+    if (occupied(g, cx, cy)) { settle(g, px, py, f.type); return true } // exact corner-on hit: both axes crossed in one substep
     if (canLand(g, cx, cy)) { settle(g, cx, cy, f.type); return true }
     px = cx; py = cy
   }

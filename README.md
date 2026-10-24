@@ -319,4 +319,8 @@ lens; the rest of the page is grey.
   tick, in units of `TICK_MS` (100 ms), so a shot covers the same distance per
   second at 6 frames per second as it would at 12. A stall longer than three
   ticks is capped so the shot never teleports.
+- A shot stops only on real contact: head-on or directly alongside a bubble, or
+  at the wall. Diagonal cells are 1.4 diameters apart, so a shot slides past a
+  corner instead of catching on it. Hanging and matching still use all eight
+  neighbours, as the hex levels need.
 - The font is proportional. Only glyphs measured as one cell wide may go in the grid; see the font test page.

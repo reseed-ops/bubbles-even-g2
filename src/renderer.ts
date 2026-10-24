@@ -39,7 +39,7 @@ type PushSample = { at: number; ms: number }
 const samples: PushSample[] = []
 const skips: number[] = []       // when a frame was dropped because every slot was busy
 const METER_WINDOW_MS = 3000
-const IDLE_GAP_MS = 400          // a longer pause between pushes is the player aiming, not a slow frame
+const IDLE_GAP_MS = 250          // a longer pause between pushes is the player aiming, not a slow frame
 
 export type FrameMeter = {
   ms: number        // mean round trip of a push, send to acknowledgement
