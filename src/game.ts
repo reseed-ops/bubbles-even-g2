@@ -1,13 +1,14 @@
 // Pure game logic. No SDK imports so it can be unit-tested in plain node.
 import {
   COLS, ROWS, SHOOTER_X, SHOOTER_Y, DEAD_COL,
-  WALL_INSET, SHOTS_PER_WALL_ADVANCE,
+  WALL_INSET,
   MAX_ANGLE_DEG, BUBBLE_SPEED, SUBSTEP, AIM_MAX_STEPS,
   MAX_TYPES, POP_POINTS, DROP_BASE_POINTS, DROP_CAP, LEVEL_POINTS,
   BLAST_SIZE, EFFECT_FRAMES, BLAST_FRAMES,
   STAR, RAINBOW, STONE, BOMB, FROZEN, CRACKED, MYSTERY_BASE, SPECIALS_FROM_LEVEL, RAINBOW_SHOT_CHANCE,
-  COMBO_MAX, PUSH_EVERY, ENDLESS_START_DEPTH, PUZZLE_EXTRA_SHOTS,
+  COMBO_MAX, ENDLESS_START_DEPTH,
   PICKUP_CHANCE, PICKUP_FROM_LEVEL, PICKUP_MARGIN, CONTINUES, CONTINUE_CLEAR,
+  WALL_EVERY, HURRY_SCALE, PUZZLE_EXTRA, PUSH_EVERY_START, PUSH_TIGHTEN_WAVES, PUSH_EVERY_MIN, MAX_LEVEL,
   PULLEY_WEIGHT, PULLEY_MAX_SHIFT,
   HURRY_WARN_TICKS, HURRY_TICKS, BLINK_TICKS,
   BONUS_PER_SHOT, SKIP_POINTS,
@@ -30,6 +31,22 @@ function forEachNeighbour(x: number, y: number, fn: (nx: number, ny: number) => 
 export type Phase = 'splash' | 'play' | 'over'
 export type Mode = 'classic' | 'pulley' | 'endless' | 'puzzle'
 export const MODES: readonly Mode[] = ['classic', 'pulley', 'endless', 'puzzle']
+export type Difficulty = 'easy' | 'normal' | 'hard'
+export const DIFFICULTIES: readonly Difficulty[] = ['easy', 'normal', 'hard']
+
+// Lifetime counters, kept across games by the app.
+export type Stats = {
+  games: number
+  shots: number
+  popped: number
+  dropped: number
+  biggestDrop: number
+  longestCombo: number
+  levelsCleared: number
+  pickups: number
+  bestWave: number
+}
+export const emptyStats = (): Stats => ({ games: 0, shots: 0, popped: 0, dropped: 0, biggestDrop: 0, longestCombo: 0, levelsCleared: 0, pickups: 0, bestWave: 0 })
 
 export type Flying = { x: number; y: number; vx: number; vy: number; type: number }
 export type Falling = { x: number; y: number; type: number }
@@ -37,6 +54,8 @@ export type Falling = { x: number; y: number; type: number }
 export type Game = {
   phase: Phase
   mode: Mode
+  difficulty: Difficulty
+  stats: Stats
   field: Uint8Array        // 0 = empty, 1..MAX_TYPES = colour, STAR/RAINBOW/STONE specials; index = y * COLS + x
   cols: number             // playable width; field stride stays COLS
   speed: number            // cells the flying bubble moves per tick
@@ -93,6 +112,8 @@ export function createGame(): Game {
   return {
     phase: 'splash',
     mode: 'pulley', // the default; classic is the opt-out
+    difficulty: 'normal',
+    stats: emptyStats(),
     field: new Uint8Array(COLS * ROWS),
     cols: COLS,
     speed: BUBBLE_SPEED,
@@ -167,6 +188,58 @@ function randomLoadable(g: Game): number {
 
 export const LEVEL_COUNT = LEVELS.length
 
+// Pacing by difficulty and, in endless, by how far you have got.
+export const wallEvery = (g: Game): number => WALL_EVERY[g.difficulty]
+export const pushEvery = (g: Game): number =>
+  Math.max(PUSH_EVERY_MIN, PUSH_EVERY_START[g.difficulty] - Math.floor((g.level - 1) / PUSH_TIGHTEN_WAVES))
+export const paceEvery = (g: Game): number => (g.mode === 'endless' ? pushEvery(g) : wallEvery(g))
+const hurryScale = (g: Game): number =>
+  HURRY_SCALE[g.difficulty] * (g.mode === 'endless' ? pushEvery(g) / PUSH_EVERY_START[g.difficulty] : 1)
+export const hurryWarnTicks = (g: Game): number => Math.round(HURRY_WARN_TICKS * hurryScale(g))
+export const hurryTicks = (g: Game): number => Math.round(HURRY_TICKS * hurryScale(g))
+
+// A small seeded generator (mulberry32) so a generated level is the same for everyone.
+function seeded(seed: number): () => number {
+  let a = seed >>> 0
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0
+    let t = a
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+// Levels past the 100 Frozen Bubble layouts: a hanging layout in the same
+// 9-row, 10-deep format. Each column can only hold a bubble where the column
+// nearer the wall has one within a row of it, so everything hangs from the
+// wall; the first column always has a few. Deeper levels are denser and use
+// more colours; every other level is mirrored top to bottom.
+export function generateLevel(n: number): string[] {
+  const rnd = seeded(n * 2654435761)
+  const colours = Math.min(MAX_TYPES, 4 + Math.floor((n - LEVEL_COUNT) / 10))
+  const density = Math.min(0.9, 0.6 + (n - LEVEL_COUNT) / 400)
+  const mirror = n % 2 === 0
+  const rowsToFill = mirror ? Math.ceil(ROWS / 2) : ROWS
+  const grid: number[][] = Array.from({ length: ROWS }, () => new Array(LEVEL_DEPTH).fill(0))
+  for (let d = 0; d < LEVEL_DEPTH; d++) {
+    for (let y = 0; y < rowsToFill; y++) {
+      const supported = d === 0 || [y - 1, y, y + 1].some((yy) => yy >= 0 && yy < ROWS && grid[yy][d - 1])
+      if (!supported) continue
+      const p = density * (1 - d / (LEVEL_DEPTH + 2))
+      if (rnd() < p) grid[y][d] = 1 + Math.floor(rnd() * colours)
+    }
+    if (d === 0 && grid.filter((row) => row[0]).length < 3) {
+      for (const y of [0, Math.floor(rowsToFill / 2), rowsToFill - 1]) if (!grid[y][0]) grid[y][0] = 1 + Math.floor(rnd() * colours)
+    }
+  }
+  if (mirror) for (let y = 0; y < ROWS; y++) if (y >= rowsToFill) grid[y] = grid[ROWS - 1 - y].slice()
+  return grid.map((row) => row.map((t) => (t ? String(t) : '.')).join(''))
+}
+
+export const layoutFor = (level: number): readonly string[] =>
+  level <= LEVEL_COUNT ? LEVELS[level - 1] : generateLevel(level)
+
 // Pulley mode hangs two groups from one axle on the shooter row: rows above
 // it and rows below it, each on its own wall. The heavier group hangs closer
 // to the shooter. The shooter row itself is the axle's row and keeps the base wall.
@@ -196,7 +269,7 @@ function shiftPickups(g: Game, by: number, rows?: (y: number) => boolean): void 
       const x = c % COLS, y = Math.floor(c / COLS)
       if (rows && !rows(y)) return c
       const nx = x + by
-      return nx >= DEAD_COL && nx < COLS ? idx(nx, y) : -1
+      return nx >= DEAD_COL + 2 && nx < COLS ? idx(nx, y) : -1
     })
     .filter((c) => c >= 0 && !g.field[c])
 }
@@ -284,7 +357,8 @@ function pushColumn(g: Game): void {
   g.level++ // a wave
 }
 
-export const puzzleShots = (levelBubbles: number): number => Math.ceil(levelBubbles / 2) + PUZZLE_EXTRA_SHOTS
+export const puzzleShots = (levelBubbles: number, difficulty: Difficulty = 'normal'): number =>
+  Math.ceil(levelBubbles / 2) + PUZZLE_EXTRA[difficulty]
 
 // Loads Frozen Bubble level N (wrapping after the last one). Column 0 of the
 // level data sits against the wall.
@@ -295,7 +369,7 @@ export function fillLevel(g: Game): void {
   if (g.mode === 'endless') {
     fillEndless(g)
   } else {
-    const layout = LEVELS[(g.level - 1) % LEVELS.length]
+    const layout = layoutFor(g.level)
     for (let y = 0; y < ROWS && y < layout.length; y++) {
       if (g.mode === 'pulley' && y === SHOOTER_Y) continue // the axle row stays clear
       const row = layout[y]
@@ -315,7 +389,7 @@ export function fillLevel(g: Game): void {
     seedSpecials(g)
   }
   g.levelBubbles = g.field.reduce((n, t) => n + (t ? 1 : 0), 0)
-  g.shotsLeft = g.mode === 'puzzle' ? puzzleShots(g.levelBubbles) : -1
+  g.shotsLeft = g.mode === 'puzzle' ? puzzleShots(g.levelBubbles, g.difficulty) : -1
   g.loaded = randomLoadable(g)
   g.next = randomLoadable(g)
   g.next2 = randomLoadable(g)
@@ -361,6 +435,7 @@ export function startGame(g: Game, opts: GameOptions = {}): void {
   g.combo = 0
   g.justCleared = false
   g.continues = CONTINUES
+  g.stats.games++
   if (g.mode === 'endless') g.level = 1 // waves always start from the first
   fillLevel(g)
   g.phase = 'play'
@@ -374,7 +449,7 @@ export function continueGame(g: Game): boolean {
   for (let y = 0; y < ROWS; y++) {
     for (let x = 0; x < DEAD_COL + CONTINUE_CLEAR; x++) g.field[idx(x, y)] = 0
   }
-  if (g.mode === 'puzzle') g.shotsLeft = Math.max(g.shotsLeft, PUZZLE_EXTRA_SHOTS)
+  if (g.mode === 'puzzle') g.shotsLeft = Math.max(g.shotsLeft, PUZZLE_EXTRA[g.difficulty])
   g.ranked = false
   g.combo = 0
   g.flying = null
@@ -413,6 +488,7 @@ function collectPickup(g: Game, cell: number): boolean {
   const at = g.pickups.indexOf(cell)
   if (at < 0) return false
   g.pickups.splice(at, 1)
+  g.stats.pickups++
   g.next = PICKUP_SPECIALS[randomInt(PICKUP_SPECIALS.length)]
   if (g.effectFrame === 0) {
     g.flash = [cell]
@@ -435,9 +511,9 @@ export const comboMultiplier = (g: Game): number => Math.max(1, Math.min(COMBO_M
 
 // The harder path after a clear: skip the next level for a bonus.
 export function skipLevel(g: Game): boolean {
-  if (g.phase !== 'play' || g.level >= LEVEL_COUNT || g.mode === 'endless') return false
+  if (g.phase !== 'play' || g.level >= MAX_LEVEL || g.mode === 'endless') return false
   g.level++
-  g.levelReached = Math.min(LEVEL_COUNT, Math.max(g.levelReached, g.level))
+  g.levelReached = Math.min(MAX_LEVEL, Math.max(g.levelReached, g.level))
   g.score += SKIP_POINTS
   fillLevel(g)
   return true
@@ -525,6 +601,7 @@ export function fire(g: Game): boolean {
   g.flying = { x: SHOOTER_X, y: SHOOTER_Y, vx, vy, type: g.loaded }
   g.trail = []
   g.idleTicks = 0
+  g.stats.shots++
   g.loaded = g.next
   g.next = g.next2
   g.next2 = randomLoadable(g)
@@ -751,6 +828,10 @@ function settle(g: Game, x: number, y: number, type: number): void {
     const dropped = dropDetached(g)
     g.score += dropPoints(dropped) * times
     removed = popped.size + dropped
+    g.stats.popped += popped.size
+    g.stats.dropped += dropped
+    g.stats.biggestDrop = Math.max(g.stats.biggestDrop, dropped)
+    g.stats.longestCombo = Math.max(g.stats.longestCombo, g.combo)
   } else {
     g.combo = 0
   }
@@ -773,14 +854,16 @@ function settle(g: Game, x: number, y: number, type: number): void {
     g.lastLevelShots = g.shots
     g.lastBonus = clearBonus(g.levelBubbles, g.shots)
     g.score += LEVEL_POINTS + g.lastBonus
-    // Clearing the last layout is the ending (endless has no last wave).
-    if (g.mode !== 'endless' && g.level >= LEVEL_COUNT) {
-      g.levelReached = LEVEL_COUNT
+    g.stats.levelsCleared++
+    // Clearing the hundredth layout is the ending (endless has no last wave).
+    // Generated levels lie beyond it for anyone who wants to keep going.
+    if (g.mode !== 'endless' && g.level === LEVEL_COUNT) {
+      g.levelReached = Math.max(g.levelReached, LEVEL_COUNT + 1)
       endGame(g, true)
       return
     }
     g.level++
-    if (g.mode !== 'endless') g.levelReached = Math.min(LEVELS.length, Math.max(g.levelReached, g.level))
+    if (g.mode !== 'endless') g.levelReached = Math.min(MAX_LEVEL, Math.max(g.levelReached, g.level))
     g.justCleared = true
     fillLevel(g)
     return
@@ -792,13 +875,14 @@ function settle(g: Game, x: number, y: number, type: number): void {
     return
   }
   if (g.mode === 'endless') {
-    if (g.shots % PUSH_EVERY === 0) {
+    if (g.shots % pushEvery(g) === 0) {
       pushColumn(g)
+      g.stats.bestWave = Math.max(g.stats.bestWave, g.level)
       if (anyBubbleDead(g)) { endGame(g, false); return }
     }
     return
   }
-  if (g.shots % SHOTS_PER_WALL_ADVANCE === 0) {
+  if (g.shots % wallEvery(g) === 0) {
     advanceWall(g)
     if (anyBubbleDead(g)) { endGame(g, false); return }
   }
@@ -808,12 +892,12 @@ function settle(g: Game, x: number, y: number, type: number): void {
 // has been idle long enough for the hurry-up.
 export const wallWarning = (g: Game): boolean => {
   if (g.mode === 'puzzle') return false
-  const every = g.mode === 'endless' ? PUSH_EVERY : SHOTS_PER_WALL_ADVANCE
-  return g.shots % every === every - 1 || g.idleTicks >= HURRY_WARN_TICKS
+  const every = paceEvery(g)
+  return g.shots % every === every - 1 || (hurries(g) && g.idleTicks >= hurryWarnTicks(g))
 }
 
-// Puzzle mode has no clock and no moving wall: it is for thinking.
-const hurries = (g: Game): boolean => g.mode !== 'puzzle'
+// Puzzle mode has no clock and no moving wall: it is for thinking. Easy never hurries.
+const hurries = (g: Game): boolean => g.mode !== 'puzzle' && HURRY_SCALE[g.difficulty] > 0
 
 export const blinkOn = (g: Game): boolean => Math.floor(g.ticks / BLINK_TICKS) % 2 === 0
 
@@ -837,7 +921,7 @@ export function tick(g: Game): boolean {
   if (!f) {
     if (g.queuedShot) return fire(g) || changed
     if (hurries(g)) g.idleTicks++
-    if (g.idleTicks >= HURRY_TICKS) {
+    if (hurries(g) && g.idleTicks >= hurryTicks(g)) {
       g.idleTicks = 0
       if (g.mode === 'endless') pushColumn(g)
       else advanceWall(g)

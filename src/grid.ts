@@ -1,9 +1,9 @@
 // Turns game state into the text the glasses show. Pure: no SDK imports.
 import {
   COLS, DEAD_COL, ROWS, SCREEN_ROWS, SHOOTER_X, SHOOTER_Y,
-  SHOTS_PER_WALL_ADVANCE, PUSH_EVERY, SKIP_POINTS, BOMB, FROZEN, CRACKED,
+  SKIP_POINTS, BOMB, FROZEN, CRACKED,
 } from './layout.ts'
-import { aimAngle, aimPath, blinkOn, comboMultiplier, idx, isMystery, wallFor, wallWarning, LEVEL_COUNT, type Game, type Mode } from './game.ts'
+import { aimAngle, aimPath, blinkOn, comboMultiplier, idx, isMystery, paceEvery, wallFor, wallWarning, LEVEL_COUNT, type Game, type Mode } from './game.ts'
 
 // Glyphs confirmed to be exactly one grid cell wide in the G2 firmware font
 // (see the ?test=font pages).
@@ -142,8 +142,7 @@ function gridCells(g: Game, overlay?: string): string[] {
     if (wx < COLS) cells[idx(wx, y)] = wallGlyph
   }
   if (g.mode !== 'puzzle') {
-    const every = g.mode === 'endless' ? PUSH_EVERY : SHOTS_PER_WALL_ADVANCE
-    const tickRow = g.shots % every
+    const tickRow = g.shots % paceEvery(g)
     const tickX = wallFor(g, tickRow) + 1
     if (tickX < COLS) cells[idx(tickX, tickRow)] = WALL_PROGRESS
   }
@@ -233,9 +232,9 @@ function withStack(inner: string[]): string[] {
 
 export function renderSplash(g: Game): string {
   const demoShot = BUBBLE[1] + AIM_HORIZONTAL.repeat(INNER - 1 - [...TITLE_STACK[2]].length - 1) + TARGET
-  const start = g.levelReached > 1 ? `TAP: LEVEL ${g.startLevel}  SWIPE: PICK` : 'TAP TO START'
+  const start = g.levelReached > 1 ? `TAP: LEVEL ${g.startLevel} SWIPE: PICK` : 'TAP TO START' // fits three digits
   const mode = MODE_NAMES[g.mode].toUpperCase()
-  const record = g.highScore > 0 ? `BEST ${g.highScore}` : g.mode === 'endless' ? 'WAVES FOREVER' : `${LEVEL_COUNT} LEVELS`
+  const record = g.highScore > 0 ? `BEST ${g.highScore}` : g.mode === 'endless' ? 'WAVES FOREVER' : `${LEVEL_COUNT}+ LEVELS`
   return framed(withStack([
     fullwidth(' BUBBLES'),
     '',
@@ -252,7 +251,7 @@ export function renderSplash(g: Game): string {
 // to the next level when this is drawn, so the cleared one is the level
 // before. The harder path skips a level for a bonus.
 export function renderLevelCard(g: Game, skip = false): string {
-  const canSkip = g.level < LEVEL_COUNT && g.mode !== 'endless'
+  const canSkip = g.mode !== 'endless'
   const unit = g.mode === 'endless' ? 'WAVE' : 'LEVEL'
   const next = skip && canSkip ? `NEXT: SKIP TO ${g.level + 1}  +${SKIP_POINTS}` : `NEXT: ${unit} ${g.level}`
   return framed([

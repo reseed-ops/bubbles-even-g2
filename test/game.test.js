@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { COLS, ROWS, SCREEN_ROWS, DEAD_COL, SHOOTER_X, SHOOTER_Y, MAX_ANGLE_DEG, SWIPE_AIM_DEG, SHOTS_PER_WALL_ADVANCE, STAR, RAINBOW, STONE, BOMB, FROZEN, CRACKED, MYSTERY_BASE, PUSH_EVERY, COMBO_MAX, HURRY_TICKS, HURRY_WARN_TICKS, SKIP_POINTS, LEVEL_POINTS } from '../src/layout.ts'
-import { createGame, chooseStartLevel, dropPoints, clearBonus, skipLevel, startGame, setAim, fire, tick, aimPath, idx, nudgeAim, nudgeToNextLanding, aimAngle, fillLevel, wallFor, wallWarning, isColour, isMystery, mysteryColour, swapBubbles, continueGame, comboMultiplier, puzzleShots, MODES, LEVEL_COUNT } from '../src/game.ts'
+import { createGame, chooseStartLevel, dropPoints, clearBonus, skipLevel, startGame, setAim, fire, tick, aimPath, idx, nudgeAim, nudgeToNextLanding, aimAngle, fillLevel, wallFor, wallWarning, isColour, isMystery, mysteryColour, swapBubbles, continueGame, wallEvery, pushEvery, hurryTicks, generateLevel, layoutFor, comboMultiplier, puzzleShots, MODES, LEVEL_COUNT } from '../src/game.ts'
 import { LEVELS, LEVEL_DEPTH } from '../src/levels.ts'
 import { BUBBLE, renderGrid, renderSplash, renderLevelCard, renderGameOver, renderFireworks, fullwidthNumber, fullwidth } from '../src/grid.ts'
 const fw = fullwidth
@@ -425,6 +425,80 @@ test('one continue per game clears the nearest columns and makes the run unranke
   assert.ok(!continueGame(won), 'no continue after a win')
 })
 
+test('difficulty sets the wall pace and hurry-up; endless waves tighten', () => {
+  const g = classic(); startGame(g)
+  assert.equal(wallEvery(g), 8)
+  g.difficulty = 'easy'; assert.equal(wallEvery(g), 10)
+  g.difficulty = 'hard'; assert.equal(wallEvery(g), 6)
+  // Easy never hurries.
+  const e = classic(); e.difficulty = 'easy'; startGame(e)
+  const wall = e.wallCol
+  for (let i = 0; i < HURRY_TICKS + 10; i++) tick(e)
+  assert.equal(e.wallCol, wall, 'no hurry-up on easy')
+  assert.ok(!wallWarning(e))
+  // Hard hurries sooner than normal.
+  const h = classic(); h.difficulty = 'hard'; startGame(h)
+  assert.ok(hurryTicks(h) < HURRY_TICKS && hurryTicks(h) > 0)
+  // Puzzle slack by difficulty.
+  assert.equal(puzzleShots(40, 'easy'), 28); assert.equal(puzzleShots(40, 'normal'), 25); assert.equal(puzzleShots(40, 'hard'), 23)
+  // Endless: waves come sooner as they go on, never faster than the floor.
+  const n = createGame(); n.mode = 'endless'; startGame(n)
+  assert.equal(pushEvery(n), 6)
+  n.level = 9; assert.equal(pushEvery(n), 5)
+  n.level = 17; assert.equal(pushEvery(n), 4)
+  n.level = 90; assert.equal(pushEvery(n), 3)
+  assert.ok(hurryTicks(n) < HURRY_TICKS, 'the hurry-up tightens with the waves')
+})
+
+test('levels past 100 are generated, hanging, seeded and bounded', () => {
+  for (const n of [101, 102, 137, 250, 999]) {
+    const layout = generateLevel(n)
+    assert.equal(layout.length, ROWS)
+    for (const row of layout) assert.equal(row.length, LEVEL_DEPTH)
+    assert.deepEqual(generateLevel(n), layout, 'the same every time')
+    const g = classic(); g.levelReached = n; startGame(g, { level: n })
+    assert.equal(g.level, n)
+    let count = 0
+    for (let c = 0; c < g.field.length; c++) if (g.field[c]) count++
+    assert.ok(count >= 10, `level ${n} has bubbles (${count})`)
+    checkInvariants(g) // every bubble hangs from the wall
+  }
+  assert.notDeepEqual(generateLevel(101), generateLevel(102))
+  assert.equal(layoutFor(50), LEVELS[49])
+  // Clearing level 100 still wins, and unlocks the levels beyond.
+  const w = classic(); w.levelReached = LEVEL_COUNT; startGame(w, { level: LEVEL_COUNT })
+  w.field.fill(0); w.field[idx(w.wallCol, SHOOTER_Y)] = 1; w.field[idx(w.wallCol - 1, SHOOTER_Y)] = 1
+  w.loaded = 1; shoot(w)
+  assert.equal(w.won, true)
+  assert.equal(w.levelReached, LEVEL_COUNT + 1)
+  assert.ok(chooseStartLevel(w, 1) || w.startLevel === LEVEL_COUNT + 1)
+  // Level 101 itself does not end the game when cleared.
+  const b = classic(); b.levelReached = 101; startGame(b, { level: 101 })
+  b.field.fill(0); b.field[idx(b.wallCol, SHOOTER_Y)] = 1; b.field[idx(b.wallCol - 1, SHOOTER_Y)] = 1
+  b.loaded = 1; shoot(b)
+  assert.equal(b.phase, 'play'); assert.equal(b.level, 102)
+})
+
+test('lifetime stats accumulate', () => {
+  const g = classic(); startGame(g)
+  assert.equal(g.stats.games, 1)
+  const w = g.wallCol
+  g.field.fill(0); g.field[idx(w, SHOOTER_Y)] = 1; g.field[idx(w - 1, SHOOTER_Y)] = 1
+  g.field[idx(w - 1, SHOOTER_Y + 1)] = 2; g.field[idx(w, 0)] = 3
+  g.loaded = 1; shoot(g)
+  assert.equal(g.stats.shots, 1)
+  assert.equal(g.stats.popped, 3)
+  assert.equal(g.stats.dropped, 1)
+  assert.equal(g.stats.biggestDrop, 1)
+  assert.equal(g.stats.longestCombo, 1)
+  g.pickups = [idx(10, SHOOTER_Y)]; g.loaded = 4
+  g.field.fill(0); g.field[idx(w, 0)] = 3
+  shoot(g)
+  assert.equal(g.stats.pickups, 1)
+  startGame(g)
+  assert.equal(g.stats.games, 2, 'stats persist across games on the same object')
+})
+
 test('the short aim guide stops at the first bounce', () => {
   const g = classic(); startGame(g)
   g.field.fill(0); g.field[idx(g.wallCol, 0)] = 1
@@ -603,7 +677,9 @@ test('a returning player can start from any level reached', () => {
   assert.ok(splash[5].includes(fw('TAP: LEVEL 5')), 'the chosen start level is kept: ' + splash[5])
   assert.ok(chooseStartLevel(g, 1))
   splash = renderSplash(g).split('\n')
-  assert.ok(splash[5].includes(fw('TAP: LEVEL 6  SWIPE: PICK')), splash[5])
+  assert.ok(splash[5].includes(fw('TAP: LEVEL 6 SWIPE: PICK')), splash[5])
+  g.levelReached = 137; g.startLevel = 137
+  assert.ok(renderSplash(g).split('\n')[5].includes(fw('TAP: LEVEL 137 SWIPE: PICK')), 'three-digit levels fit')
 })
 
 test('drops pay exponentially, big clears blast, and only level-1 games set a best', () => {
@@ -711,7 +787,7 @@ test('title and end screens use the grid rows and exact copy', () => {
   assert.ok(splash[1].startsWith('◇') && splash[2].startsWith('│') && splash[8].endsWith('◇'), 'flourished corners, light sides')
   assert.ok(splash[1].includes('ＢＵＢＢＬＥＳ'), 'the name is set in fullwidth letters on the grid')
   assert.ok(splash[3].includes('●━') && splash[3].includes('━◌'), 'the demo shot has a shooter and landing marker')
-  assert.ok(splash[8].includes(fw('CLASSIC   100 LEVELS')), 'no best score shows the level count')
+  assert.ok(splash[8].includes(fw('CLASSIC   100+ LEVELS')), 'no best score shows the level count')
   g.highScore = 420
   assert.ok(renderSplash(g).split('\n')[8].includes(fw('CLASSIC   BEST 420')))
   g.mode = 'pulley'

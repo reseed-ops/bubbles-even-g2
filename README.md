@@ -95,6 +95,24 @@ Puzzle: the same 100 layouts with a shot limit, half the level's bubbles plus
 five, counted down under the launcher. No wall advance and no hurry-up: run
 out of shots with bubbles left and the game is over.
 
+### Difficulty, levels beyond 100, and stats
+
+Difficulty (phone page or the G2 menu): easy moves the wall every 10 shots
+and never hurries you; normal every 8 with the hurry-up; hard every 6 with a
+faster hurry-up. Puzzle mode gets 8, 5 or 3 spare shots. In endless, waves
+start every 7, 6 or 5 shots and come one shot sooner every eight waves, down
+to three, with the hurry-up tightening to match.
+
+Clearing level 100 is still the ending, but it unlocks level 101 onward:
+generated layouts in the same shape, seeded by the level number so level 137
+is the same for everyone, denser and more colourful the further you go, up to
+999. Pick any level you have reached from the phone page's level field, or by
+swiping on the title.
+
+The phone page keeps lifetime totals: games, shots, bubbles popped and
+dropped, biggest drop, longest combo, levels cleared, pickups taken and the
+furthest wave. They live in the Even app's local storage with the scores.
+
 ### Pace
 
 The wall blinks on the last shot before it advances. It also hurries you:
@@ -280,7 +298,7 @@ lens; the rest of the page is grey.
   the blast effect; `?preview=specials` stages a star, a rainbow and a stone
   with a rainbow queued (plus a bomb, ice and a mystery, and a running combo);
   `?mode=classic|pulley|endless|puzzle` picks the mode; `?aim=short` the
-  short aim guide; `?preview=over` shows the game over with the continue offer.
+  short aim guide; `?level=137` unlocks and picks a start level; `?preview=over` shows the game over with the continue offer.
 
 ## Known limits
 

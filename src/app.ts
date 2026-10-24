@@ -1,6 +1,6 @@
 import type { EvenAppBridge } from '@evenrealities/even_hub_sdk'
-import { BOMB, FROZEN, MYSTERY_BASE, PUSH_EVERY, RAINBOW, SHOOTER_Y, SHOTS_PER_WALL_ADVANCE, STAR, STONE, SWIPE_AIM_DEG, TICK_MS } from './layout.ts'
-import { aimAngle, chooseStartLevel, continueGame, createGame, fire, idx, isOver, isPlaying, nudgeToNextLanding, setAim, skipLevel, startGame, swapBubbles, tick, LEVEL_COUNT, MODES, type Game, type Mode, type Phase } from './game.ts'
+import { BOMB, FROZEN, MAX_LEVEL, MYSTERY_BASE, RAINBOW, SHOOTER_Y, STAR, STONE, SWIPE_AIM_DEG, TICK_MS } from './layout.ts'
+import { aimAngle, chooseStartLevel, continueGame, createGame, emptyStats, fire, idx, isOver, isPlaying, nudgeToNextLanding, paceEvery, setAim, skipLevel, startGame, swapBubbles, tick, DIFFICULTIES, MODES, type Difficulty, type Game, type Mode, type Phase, type Stats } from './game.ts'
 import { modeName, renderFireworks, renderGameOver, renderGrid, renderLevelCard, renderSplash } from './grid.ts'
 import { currentPage, invalidate, pushScreen, showPage, type PageKind } from './renderer.ts'
 import { toInput, type Input } from './events.ts'
@@ -9,6 +9,8 @@ const HIGH_SCORE_KEY = 'bubbles_high_score'  // classic; other modes append _<mo
 const LEVEL_KEY = 'bubbles_level_reached'
 const MODE_KEY = 'bubbles_mode'
 const HARD_AIM_KEY = 'bubbles_hard_aim'
+const DIFFICULTY_KEY = 'bubbles_difficulty'
+const STATS_KEY = 'bubbles_stats'
 const highScoreKey = (mode: Mode) => (mode === 'classic' ? HIGH_SCORE_KEY : `${HIGH_SCORE_KEY}_${mode}`)
 
 export type Status = {
@@ -17,7 +19,10 @@ export type Status = {
   screen: string            // exactly what the glasses show
   phase: Phase
   mode: Mode
+  difficulty: Difficulty
   hardAim: boolean
+  levelReached: number
+  stats: Stats
   level: number
   score: number
   best: number
@@ -33,6 +38,8 @@ export type App = {
   centerAim: () => void
   setMode: (mode: Mode) => void
   setHardAim: (on: boolean) => void
+  setDifficulty: (d: Difficulty) => void
+  setStartLevel: (level: number) => void
   preview: (kind: PreviewKind) => void   // developer aid: shows an end screen with sample numbers
   status: () => Status
 }
@@ -62,9 +69,15 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
   try {
     const reached = parseInt((await bridge.getLocalStorage(LEVEL_KEY)) ?? '', 10)
     if (reached > 1) {
-      game.levelReached = Math.min(LEVEL_COUNT, reached)
+      game.levelReached = Math.min(MAX_LEVEL, reached)
       game.startLevel = game.levelReached // a returning player continues where they got to
     }
+    const savedDifficulty = await bridge.getLocalStorage(DIFFICULTY_KEY)
+    if (DIFFICULTIES.includes(savedDifficulty as Difficulty)) game.difficulty = savedDifficulty as Difficulty
+    try {
+      const saved = JSON.parse((await bridge.getLocalStorage(STATS_KEY)) || '{}') as Partial<Stats>
+      game.stats = { ...emptyStats(), ...saved }
+    } catch { game.stats = emptyStats() }
     const savedMode = await bridge.getLocalStorage(MODE_KEY)
     if (MODES.includes(savedMode as Mode)) game.mode = savedMode as Mode
     game.hardAim = (await bridge.getLocalStorage(HARD_AIM_KEY)) === '1'
@@ -81,6 +94,7 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
     savedLevelReached = game.levelReached
     void bridge.setLocalStorage(LEVEL_KEY, String(game.levelReached)).catch(() => {})
   }
+  const saveStats = () => { void bridge.setLocalStorage(STATS_KEY, JSON.stringify(game.stats)).catch(() => {}) }
 
   function currentScreen(): string {
     if (isPlaying(game)) return renderGrid(game)
@@ -94,7 +108,10 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
     screen: screenText,
     phase: game.phase,
     mode: game.mode,
+    difficulty: game.difficulty,
     hardAim: game.hardAim,
+    levelReached: game.levelReached,
+    stats: game.stats,
     level: isPlaying(game) || isOver(game) ? game.level : game.startLevel,
     score: game.score,
     best: game.highScore,
@@ -105,8 +122,8 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
   const pace = (): { label: string; value: string } => {
     if (!isPlaying(game)) return { label: game.mode === 'puzzle' ? 'Shots left' : game.mode === 'endless' ? 'Next wave in' : 'Wall moves in', value: '–' }
     if (game.mode === 'puzzle') return { label: 'Shots left', value: String(Math.max(0, game.shotsLeft)) }
-    if (game.mode === 'endless') return { label: 'Next wave in', value: shots(PUSH_EVERY - (game.shots % PUSH_EVERY)) }
-    return { label: 'Wall moves in', value: shots(SHOTS_PER_WALL_ADVANCE - (game.shots % SHOTS_PER_WALL_ADVANCE)) }
+    const every = paceEvery(game)
+    return { label: game.mode === 'endless' ? 'Next wave in' : 'Wall moves in', value: shots(every - (game.shots % every)) }
   }
   const aimText = () => {
     const deg = Math.round(aimAngle(game))
@@ -198,11 +215,14 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
         if (game.justCleared) {
           game.justCleared = false
           saveProgress()
+          saveStats()
           if (isPlaying(game)) await showLevelUp()
         }
         if (changed || screenDirty) await pushPlayScreen()
         if (isOver(game)) {
           saveHighScore()
+          saveProgress()
+          saveStats()
           continueOffered = !game.won && game.continues > 0
           await sleep(300)
           await showCurrentScreen()
@@ -264,6 +284,23 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
         return showCurrentScreen()
       }).then(() => report(modeName(game)))
     }
+  }
+
+  function setDifficulty(d: Difficulty): void {
+    if (game.difficulty === d) return
+    game.difficulty = d
+    void bridge.setLocalStorage(DIFFICULTY_KEY, d).catch(() => {})
+    screenDirty = true
+    report(`${d[0].toUpperCase()}${d.slice(1)} difficulty${isPlaying(game) ? ', from now on' : ''}`)
+    if (!isPlaying(game)) onStatus(status())
+  }
+
+  // The phone page's level field: pick any level up to the one reached.
+  function setStartLevel(level: number): void {
+    if (!Number.isFinite(level)) return
+    chooseStartLevel(game, Math.round(level) - game.startLevel)
+    if (!isPlaying(game)) { invalidate(); void showCurrentScreen().then(() => report(`Start at level ${game.startLevel}`)) }
+    else onStatus(status())
   }
 
   function setHardAim(on: boolean): void {
@@ -349,6 +386,7 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
         if (input.id === 5) setMode('endless')
         if (input.id === 6) setMode('puzzle')
         if (input.id === 7) setHardAim(!game.hardAim)
+        if (input.id === 8) setDifficulty(DIFFICULTIES[(DIFFICULTIES.indexOf(game.difficulty) + 1) % DIFFICULTIES.length])
         break
       case 'overlay-open':
         overlayOpen = true
@@ -437,6 +475,8 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
     centerAim,
     setMode,
     setHardAim,
+    setDifficulty,
+    setStartLevel,
     preview,
     status,
   }

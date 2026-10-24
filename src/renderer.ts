@@ -23,6 +23,7 @@ const GAME_MENU = new MenuContainerProperty({
     new MenuItemProperty({ itemName: 'Endless mode', itemID: 5 }),
     new MenuItemProperty({ itemName: 'Puzzle mode', itemID: 6 }),
     new MenuItemProperty({ itemName: 'Aim guide: full or short', itemID: 7 }),
+    new MenuItemProperty({ itemName: 'Difficulty: easy, normal, hard', itemID: 8 }),
   ],
 })
 

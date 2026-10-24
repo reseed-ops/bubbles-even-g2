@@ -2,7 +2,7 @@ import { waitForEvenAppBridge } from '@evenrealities/even_hub_sdk'
 import { initApp, type App, type Status } from './app.ts'
 import { runFontTest, GLYPH_SETS } from './fonttest.ts'
 import { EMPTY } from './grid.ts'
-import { createGame, MODES, type Mode } from './game.ts'
+import { createGame, MODES, type Difficulty, type Mode } from './game.ts'
 import { renderSplash } from './grid.ts'
 import { COLS, SCREEN_ROWS } from './layout.ts'
 
@@ -79,6 +79,25 @@ function render(status: Status): void {
     b.disabled = !connected
     b.setAttribute('aria-pressed', String((b.dataset.aim === 'short') === status.hardAim))
   })
+  document.querySelectorAll<HTMLButtonElement>('[data-difficulty]').forEach((b) => {
+    b.disabled = !connected
+    b.setAttribute('aria-pressed', String(b.dataset.difficulty === status.difficulty))
+  })
+  const levelInput = $<HTMLInputElement>('start-level')
+  levelInput.disabled = !connected || status.phase === 'play' || status.mode === 'endless'
+  levelInput.max = String(status.levelReached)
+  if (document.activeElement !== levelInput) levelInput.value = String(status.level)
+  $('level-reached').textContent = status.mode === 'endless' ? 'waves start at 1' : `of ${status.levelReached} reached`
+  const s = status.stats
+  $('st-games').textContent = s.games.toLocaleString()
+  $('st-shots').textContent = s.shots.toLocaleString()
+  $('st-popped').textContent = s.popped.toLocaleString()
+  $('st-dropped').textContent = s.dropped.toLocaleString()
+  $('st-biggest').textContent = String(s.biggestDrop)
+  $('st-combo').textContent = s.longestCombo ? `×${Math.min(5, s.longestCombo)}` : '0'
+  $('st-levels').textContent = s.levelsCleared.toLocaleString()
+  $('st-pickups').textContent = s.pickups.toLocaleString()
+  $('st-wave').textContent = String(s.bestWave)
 }
 
 async function boot(): Promise<void> {
@@ -105,6 +124,8 @@ async function boot(): Promise<void> {
   const mode = params.get('mode')
   if (MODES.includes(mode as Mode)) app.setMode(mode as Mode)
   if (params.get('aim') === 'short') app.setHardAim(true)
+  const level = Number(params.get('level'))   // developer aid: unlock and pick a start level
+  if (level > 1) { app.game.levelReached = Math.max(app.game.levelReached, level); app.setStartLevel(level) }
   const preview = params.get('preview')
   if (preview === 'over' || preview === 'won' || preview === 'title' || preview === 'blast' || preview === 'specials' || preview === 'card') app.preview(preview)
 
@@ -112,6 +133,9 @@ async function boot(): Promise<void> {
   $('center-aim').onclick = () => app.centerAim()
   document.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((b) => { b.onclick = () => app.setMode(b.dataset.mode as Mode) })
   document.querySelectorAll<HTMLButtonElement>('[data-aim]').forEach((b) => { b.onclick = () => app.setHardAim(b.dataset.aim === 'short') })
+  document.querySelectorAll<HTMLButtonElement>('[data-difficulty]').forEach((b) => { b.onclick = () => app.setDifficulty(b.dataset.difficulty as Difficulty) })
+  const levelInput = $<HTMLInputElement>('start-level')
+  levelInput.onchange = () => app.setStartLevel(Number(levelInput.value))
 }
 
 void boot()

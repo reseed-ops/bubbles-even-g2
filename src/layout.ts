@@ -13,7 +13,21 @@ export const DEAD_COL = 2
 // The wall is drawn one column right of the last playable column, so the
 // playable width stops this many columns short of the edge to keep it visible.
 export const WALL_INSET = 2
-export const SHOTS_PER_WALL_ADVANCE = 8
+export const SHOTS_PER_WALL_ADVANCE = 8   // at normal difficulty; see WALL_EVERY
+
+// Difficulty: how often the wall moves, whether it hurries you, and puzzle slack.
+export const WALL_EVERY = { easy: 10, normal: 8, hard: 6 } as const
+export const HURRY_SCALE = { easy: 0, normal: 1, hard: 0.75 } as const   // 0 = never hurries
+export const PUZZLE_EXTRA = { easy: 8, normal: 5, hard: 3 } as const
+
+// Endless escalation: waves arrive this often to start, one shot sooner every
+// PUSH_TIGHTEN_WAVES waves, never faster than PUSH_EVERY_MIN.
+export const PUSH_EVERY_START = { easy: 7, normal: 6, hard: 5 } as const
+export const PUSH_TIGHTEN_WAVES = 8
+export const PUSH_EVERY_MIN = 3
+
+// Levels beyond the 100 Frozen Bubble layouts are generated; this is the ceiling.
+export const MAX_LEVEL = 999
 
 export const MAX_ANGLE_DEG = 70      // aim limit above/below the horizontal
 export const SWIPE_AIM_DEG = 8       // most a swipe turns the aim; less when the next landing cell is nearer

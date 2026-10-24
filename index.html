@@ -90,6 +90,18 @@
       .segments button[aria-pressed="true"]:disabled { background: var(--line); color: var(--muted); }
       .segments button:focus-visible { outline-offset: -3px; }
       .choice:last-of-type { margin-bottom: 24px; }
+      .level-pick { display: flex; align-items: center; gap: 12px; }
+      .level-pick input {
+        width: 5.5em; min-height: 40px; padding: 6px 10px; font: inherit; color: var(--ink);
+        background: transparent; border: 1px solid var(--line); border-radius: 9px;
+      }
+      .level-pick input:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+      .muted { color: var(--muted); }
+
+      /* Lifetime numbers, as a quiet table. */
+      .stats { display: grid; grid-template-columns: 1fr auto; row-gap: 6px; column-gap: 18px; margin: 28px 0 0; }
+      .stats dt { color: var(--muted); }
+      .stats dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
       button {
         font: inherit; color: var(--ink);
         background: transparent; border: 1px solid var(--line); border-radius: 9px;
@@ -154,6 +166,21 @@
         </div>
       </div>
       <div class="choice">
+        <span class="choice-name">Difficulty</span>
+        <div class="segments" role="group" aria-label="Difficulty">
+          <button data-difficulty="easy" aria-pressed="false" disabled>Easy</button>
+          <button data-difficulty="normal" aria-pressed="true" disabled>Normal</button>
+          <button data-difficulty="hard" aria-pressed="false" disabled>Hard</button>
+        </div>
+      </div>
+      <div class="choice">
+        <label class="choice-name" for="start-level">Start level</label>
+        <div class="level-pick">
+          <input id="start-level" type="number" inputmode="numeric" min="1" max="1" value="1" disabled />
+          <span id="level-reached" class="muted">of 1 reached</span>
+        </div>
+      </div>
+      <div class="choice">
         <span class="choice-name">Aim guide</span>
         <div class="segments" role="group" aria-label="Aim guide">
           <button data-aim="full" aria-pressed="true" disabled>Full</button>
@@ -168,6 +195,18 @@
         <dt>Tap, then hold</dt><dd>Open the menu: restart, center the aim, mode, aim guide</dd>
         <dt>Tap in flight</dt><dd>Queue the next shot</dd>
         <dt>Double tap</dt><dd>Quit</dd>
+      </dl>
+
+      <dl class="stats" aria-label="Lifetime totals">
+        <dt>Games played</dt><dd id="st-games">0</dd>
+        <dt>Shots fired</dt><dd id="st-shots">0</dd>
+        <dt>Bubbles popped</dt><dd id="st-popped">0</dd>
+        <dt>Bubbles dropped</dt><dd id="st-dropped">0</dd>
+        <dt>Biggest drop</dt><dd id="st-biggest">0</dd>
+        <dt>Longest combo</dt><dd id="st-combo">0</dd>
+        <dt>Levels cleared</dt><dd id="st-levels">0</dd>
+        <dt>Pickups taken</dt><dd id="st-pickups">0</dd>
+        <dt>Furthest wave</dt><dd id="st-wave">0</dd>
       </dl>
 
       <dl class="legend">
