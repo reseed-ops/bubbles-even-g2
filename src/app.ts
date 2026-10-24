@@ -348,7 +348,15 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
       const full = currentScreen()
       const ascii = full.replace(/\u3000/g, '  ')
       const tiny = 'Ａ'
-      const times: Record<string, number[]> = { full: [], tiny: [], ascii: [] }
+      // Probes that separate byte cost from drawing cost: a blank grid of
+      // fullwidth spaces (all the bytes, nothing drawn), the same blank in
+      // ASCII spaces (a third of the bytes, nothing drawn) and a grid of dots
+      // (all the bytes, every cell drawn).
+      const rows = full.split('\n')
+      const blank3 = rows.map((r) => '\u3000'.repeat([...r].length)).join('\n')
+      const blank1 = rows.map((r) => '  '.repeat([...r].length)).join('\n')
+      const dots = rows.map((r) => '●'.repeat([...r].length)).join('\n')
+      const times: Record<string, number[]> = { full: [], tiny: [], ascii: [], blank3: [], blank1: [], dots: [] }
       const timed = async (name: string, text: string) => {
         const t0 = Date.now()
         invalidate()
@@ -357,14 +365,16 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
         screenText = text
         onStatus(status())
       }
-      for (let round = 0; round < 4; round++) {
+      for (let round = 0; round < 3; round++) {
         await timed('full', full)
         await timed('tiny', tiny)
-        await timed('full', full)
+        await timed('blank3', blank3)
+        await timed('dots', dots)
+        await timed('blank1', blank1)
         await timed('ascii', ascii)
       }
       const mean = (xs: number[]) => (xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : NaN)
-      pushCost = `Full title ${mean(times.full)} ms, one letter ${mean(times.tiny)} ms, ASCII-spaced title ${mean(times.ascii)} ms`
+      pushCost = `Board ${mean(times.full)} ms, one letter ${mean(times.tiny)} ms, blank fullwidth ${mean(times.blank3)} ms, blank ASCII ${mean(times.blank1)} ms, all dots ${mean(times.dots)} ms, ASCII-spaced board ${mean(times.ascii)} ms`
       report('Measured. The glasses now show the ASCII-spaced screen: do its columns line up?')
     } finally {
       measuring = false
