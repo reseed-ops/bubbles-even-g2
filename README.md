@@ -307,7 +307,9 @@ lens; the rest of the page is grey.
   flight, so the display rate is set by how fast the glasses accept text rather
   than by round-trip latency. If both slots are busy a frame is skipped; the
   next tick sends the newest whole screen, so nothing stale is queued. The phone
-  page shows the measured push round trip and frames per second, and a
+  page shows the measured push round trip, the frames per second the glasses
+actually displayed while something was moving, the share of frames skipped
+because the glasses were still busy, and a
   "Glasses updates" switch falls back to one push at a time if frames ever
   arrive out of order.
 - The font is proportional. Only glyphs measured as one cell wide may go in the grid; see the font test page.

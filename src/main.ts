@@ -70,6 +70,7 @@ function render(status: Status): void {
   $('pace').textContent = status.pace.value
   $('push-ms').textContent = status.frame ? `${status.frame.ms} ms` : '–'
   $('fps').textContent = status.frame ? `${status.frame.fps}/s` : '–'
+  $('skipped').textContent = status.frame ? `${Math.round(status.frame.skipped * 100)}%` : '–'
   $<HTMLButtonElement>('new-game').disabled = status.page === null
   $<HTMLButtonElement>('center-aim').disabled = status.phase !== 'play'
   const connected = status.page !== null

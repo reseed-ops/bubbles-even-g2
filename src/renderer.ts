@@ -36,18 +36,33 @@ let maxInFlight = 2              // pipelined: the next frame leaves before the 
 // the round trip took, so the phone page can show the real BLE frame rate.
 type PushSample = { at: number; ms: number }
 const samples: PushSample[] = []
-const METER_WINDOW_MS = 2000
+const skips: number[] = []       // when a frame was dropped because every slot was busy
+const METER_WINDOW_MS = 3000
+const IDLE_GAP_MS = 400          // a longer pause between pushes is the player aiming, not a slow frame
 
-export type FrameMeter = { ms: number; fps: number }
+export type FrameMeter = {
+  ms: number        // mean round trip of a push, send to acknowledgement
+  fps: number       // sustained display rate while frames are flowing
+  skipped: number   // share of frames dropped because the glasses were still busy, 0..1
+}
 
 export function frameMeter(now = Date.now()): FrameMeter | null {
   while (samples.length && samples[0].at < now - METER_WINDOW_MS) samples.shift()
+  while (skips.length && skips[0] < now - METER_WINDOW_MS) skips.shift()
   if (!samples.length) return null
   const ms = samples.reduce((sum, s) => sum + s.ms, 0) / samples.length
-  // Frames per second is the sustained rate while frames are flowing (mean gap
-  // between consecutive pushes), not a count diluted by idle time.
-  const gaps = samples.length > 1 ? (samples[samples.length - 1].at - samples[0].at) / (samples.length - 1) : 0
-  return { ms: Math.round(ms), fps: gaps > 0 ? Math.round(1000 / gaps * 10) / 10 : 0 }
+  const gaps: number[] = []
+  for (let i = 1; i < samples.length; i++) {
+    const gap = samples[i].at - samples[i - 1].at
+    if (gap <= IDLE_GAP_MS) gaps.push(gap)
+  }
+  const meanGap = gaps.length ? gaps.reduce((a, b) => a + b, 0) / gaps.length : 0
+  const attempted = samples.length + skips.length
+  return {
+    ms: Math.round(ms),
+    fps: meanGap > 0 ? Math.round(1000 / meanGap * 10) / 10 : 0,
+    skipped: attempted ? skips.length / attempted : 0,
+  }
 }
 
 export function setPipelined(on: boolean): void {
@@ -107,7 +122,8 @@ export async function showPage(bridge: EvenAppBridge, text: string): Promise<boo
 // splice: the simulator shows only the text sent, drawn from the top, so a
 // changed-span update leaves the rest of the display blank.
 export async function pushScreen(bridge: EvenAppBridge, content: string): Promise<boolean> {
-  if (!created || inFlight >= maxInFlight || content === lastText) return false
+  if (!created || content === lastText) return false
+  if (inFlight >= maxInFlight) { skips.push(Date.now()); return false }
   inFlight++
   lastText = content   // claimed on send so a pipelined follow-up is not a duplicate
   const started = Date.now()
