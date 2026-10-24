@@ -66,6 +66,13 @@ export function frameMeter(now = Date.now()): FrameMeter | null {
   }
 }
 
+// Resolves once no push is in flight, so a caller that wants its own push
+// accepted rather than dropped can wait for the slot.
+export async function whenIdle(timeoutMs = 2000): Promise<void> {
+  const until = Date.now() + timeoutMs
+  while (inFlight > 0 && Date.now() < until) await new Promise<void>((r) => setTimeout(r, 5))
+}
+
 export function setPipelined(on: boolean): void {
   maxInFlight = on ? 2 : 1
 }

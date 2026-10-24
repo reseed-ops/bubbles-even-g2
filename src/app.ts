@@ -2,7 +2,7 @@ import type { EvenAppBridge } from '@evenrealities/even_hub_sdk'
 import { BOMB, FROZEN, MAX_LEVEL, MAX_TICK_DT, MYSTERY_BASE, RAINBOW, SHOOTER_Y, STAR, STONE, SWIPE_AIM_DEG, TICK_MS } from './layout.ts'
 import { aimAngle, chooseStartLevel, continueGame, createGame, emptyStats, fire, idx, isOver, isPlaying, nudgeToNextLanding, paceEvery, setAim, skipLevel, startGame, swapBubbles, tick, DIFFICULTIES, MODES, type Difficulty, type Game, type Mode, type Phase, type Stats } from './game.ts'
 import { modeName, renderFireworks, renderGameOver, renderGrid, renderLevelCard, renderSplash } from './grid.ts'
-import { currentPage, frameMeter, invalidate, pipelined, pushScreen, setPipelined, showPage, type FrameMeter, type PageKind } from './renderer.ts'
+import { currentPage, frameMeter, invalidate, pipelined, pushScreen, setPipelined, showPage, whenIdle, type FrameMeter, type PageKind } from './renderer.ts'
 import { toInput, type Input } from './events.ts'
 
 const HIGH_SCORE_KEY = 'bubbles_high_score'  // classic; other modes append _<mode>
@@ -358,6 +358,7 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
       const dots = rows.map((r) => '●'.repeat([...r].length)).join('\n')
       const times: Record<string, number[]> = { full: [], tiny: [], ascii: [], blank3: [], blank1: [], dots: [] }
       const timed = async (name: string, text: string) => {
+        await whenIdle()          // a frame still in flight would make the push drop, not queue
         const t0 = Date.now()
         invalidate()
         const ok = await pushScreen(bridge, text)

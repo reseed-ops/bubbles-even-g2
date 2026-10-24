@@ -735,6 +735,7 @@ function ringAround(g: Game, inner: Set<number>, exclude: Set<number>): number[]
   for (const c of inner) {
     forEachNeighbour(c % COLS, Math.floor(c / COLS), (nx, ny) => {
       const n = idx(nx, ny)
+      if (nx > wallFor(g, ny)) return   // never over the wall glyph
       if (!g.field[n] && !inner.has(n) && !exclude.has(n)) ring.add(n)
     })
   }
