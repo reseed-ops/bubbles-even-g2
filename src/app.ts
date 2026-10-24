@@ -11,7 +11,7 @@ const MODE_KEY = 'bubbles_mode'
 const HARD_AIM_KEY = 'bubbles_hard_aim'
 const DIFFICULTY_KEY = 'bubbles_difficulty'
 const STATS_KEY = 'bubbles_stats'
-const PIPELINE_KEY = 'bubbles_pipeline'    // '0' waits for each glasses update before sending the next
+const PIPELINE_KEY = 'bubbles_pipeline'    // '1' lets two glasses updates be in flight; default is one at a time
 const highScoreKey = (mode: Mode) => (mode === 'classic' ? HIGH_SCORE_KEY : `${HIGH_SCORE_KEY}_${mode}`)
 
 export type Status = {
@@ -85,7 +85,7 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
     const savedMode = await bridge.getLocalStorage(MODE_KEY)
     if (MODES.includes(savedMode as Mode)) game.mode = savedMode as Mode
     game.hardAim = (await bridge.getLocalStorage(HARD_AIM_KEY)) === '1'
-    setPipelined((await bridge.getLocalStorage(PIPELINE_KEY)) !== '0')
+    setPipelined((await bridge.getLocalStorage(PIPELINE_KEY)) === '1')
   } catch { /* phone-side storage is optional */ }
   await loadHighScore()
 

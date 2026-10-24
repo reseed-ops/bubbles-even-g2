@@ -302,14 +302,13 @@ lens; the rest of the page is grey.
 
 ## Known limits
 
-- Frame rate is bounded by the BLE text-update path. By default updates are
-  pipelined: the game ticks on its own clock and lets up to two pushes be in
-  flight, so the display rate is set by how fast the glasses accept text rather
-  than by round-trip latency. If both slots are busy a frame is skipped; the
-  next tick sends the newest whole screen, so nothing stale is queued. The phone
-  page shows the measured push round trip, the frames per second the glasses
-actually displayed while something was moving, the share of frames skipped
-because the glasses were still busy, and a
-  "Glasses updates" switch falls back to one push at a time if frames ever
-  arrive out of order.
+- Frame rate is bounded by the BLE text-update path. Measured on G2 glasses
+  (October 2026), a whole-screen push takes about 156 ms from send to
+  acknowledgement and the glasses accept one at a time, so the game displays
+  about 6 frames per second. Letting two pushes be in flight made it worse:
+  longer round trips, 19% dropped frames, 4.7 frames per second. The default is
+  therefore one push at a time, with the loop waiting for each. The phone page
+  shows the measured push round trip, the frames per second actually displayed
+  while something was moving, the share of frames skipped, and a
+  "Glasses updates" switch to try pipelining on other firmware.
 - The font is proportional. Only glyphs measured as one cell wide may go in the grid; see the font test page.

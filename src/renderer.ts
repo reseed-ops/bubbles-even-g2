@@ -30,7 +30,8 @@ const GAME_MENU = new MenuContainerProperty({
 let created = false
 let lastText = ''
 let inFlight = 0
-let maxInFlight = 2              // pipelined: the next frame leaves before the last one is acknowledged
+let maxInFlight = 1              // measured on G2 glasses 2026-10-24: one push at a time gave 5.9 fps with no drops;
+                                 // two in flight gave 4.7 fps, longer round trips and 19% dropped frames
 
 // Frame meter: every acknowledged push records when it finished and how long
 // the round trip took, so the phone page can show the real BLE frame rate.
@@ -114,9 +115,9 @@ export async function showPage(bridge: EvenAppBridge, text: string): Promise<boo
 
 // A frame that arrives while BLE is saturated is dropped instead of queued. The
 // next game tick carries the latest state, keeping input and animation lively.
-// By default two pushes may be in flight: the game loop ticks on its own clock
-// and does not wait for each acknowledgement, so the display rate is set by
-// how fast the glasses accept text rather than by round-trip latency.
+// Pipelining (two pushes in flight, the loop not waiting for acknowledgement)
+// is available from the phone page but off by default: the glasses accept
+// one update at a time, so a second push only queues behind the first.
 //
 // Every push sends the whole screen. contentOffset/contentLength are not a
 // splice: the simulator shows only the text sent, drawn from the top, so a
