@@ -11,7 +11,7 @@
     "simulate": "sh scripts/run.sh 'evenhub-simulator http://localhost:5180'",
     "simulate:headless": "sh scripts/run.sh 'sh scripts/simulator.sh http://localhost:5180'",
     "pack": "sh scripts/run.sh 'tsc --noEmit && vite build && evenhub pack app.json dist -o bubbles.ehpk'",
-    "test": "node --test test/*.test.js",
+    "test": "node --preserve-symlinks --preserve-symlinks-main --test test/*.test.js",
     "setup": "sh scripts/dev-env.sh"
   },
   "dependencies": {

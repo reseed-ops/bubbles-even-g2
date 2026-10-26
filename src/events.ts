@@ -23,12 +23,19 @@ function eventType(event: EvenHubEvent): number | string | undefined {
 }
 
 // Normalises hardware (textEvent), simulator (sysEvent) and raw-JSON shapes.
-// CLICK is 0 and sometimes arrives as undefined, so the fallback is a tap.
+// CLICK is 0 and protobuf drops zero-valued fields, so a click can arrive as
+// a text, list or sys event carrying no eventType at all: that exact shape is
+// a tap. An event type that is present but unknown is dropped, never fired.
 export function toInput(event: EvenHubEvent): Input | null {
   const menuID = event.menuItemClickEvent?.itemID
   if (menuID !== undefined) return { kind: 'menu', id: menuID }
 
   const raw = eventType(event)
+  if (raw === undefined) {
+    if (event.sysEvent?.imuData) return null
+    if (event.textEvent || event.listEvent || event.sysEvent) return { kind: 'tap' }
+    return null
+  }
   const t = typeof raw === 'string' ? fromName(raw) : raw
 
   switch (t) {
@@ -44,10 +51,6 @@ export function toInput(event: EvenHubEvent): Input | null {
     case OsEventTypeList.IMU_DATA_REPORT: return null
     case OsEventTypeList.ABNORMAL_EXIT_EVENT:
     case OsEventTypeList.SYSTEM_EXIT_EVENT:
-      return null
-    case undefined:
-      if (event.sysEvent?.imuData) return null
-      if (event.textEvent || event.listEvent || event.sysEvent) return { kind: 'tap' }
       return null
     default:
       return null

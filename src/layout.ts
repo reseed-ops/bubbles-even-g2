@@ -2,7 +2,7 @@
 // the width (proven by other G2 text-grid games); 9 rows leaves a centre row.
 export const COLS = 28
 export const ROWS = 9                // playable rows
-export const SCREEN_ROWS = 10        // rows the display fits; the tenth carries the frame's floor
+export const SCREEN_ROWS = 10        // rows the display fits; gameplay leaves the tenth blank
 
 export const SHOOTER_X = 0
 export const SHOOTER_Y = Math.floor(ROWS / 2) // 4
@@ -13,7 +13,6 @@ export const DEAD_COL = 2
 // The wall is drawn one column right of the last playable column, so the
 // playable width stops this many columns short of the edge to keep it visible.
 export const WALL_INSET = 2
-export const SHOTS_PER_WALL_ADVANCE = 8   // at normal difficulty; see WALL_EVERY
 
 // Difficulty: how often the wall moves, whether it hurries you, and puzzle slack.
 export const WALL_EVERY = { easy: 10, normal: 8, hard: 6 } as const
@@ -55,6 +54,9 @@ export const BLAST_FRAMES = 4
 // Native text updates provide the fastest full-width rendering path.
 export const TEXT_SPEED = 2.2        // cells per tick
 export const BUBBLE_SPEED = TEXT_SPEED
+// On a slow link, time-based motion would otherwise jump several cells between
+// acknowledged frames. The app uses this as a perceptual cap, not a physics cap.
+export const MAX_VISIBLE_CELLS_PER_FRAME = 2.25
 
 // Special bubbles (Bust-A-Move style). Values sit above the eight colours.
 export const STAR = 9                // a shot landing next to it clears every bubble of that shot's colour
@@ -69,12 +71,8 @@ export const RAINBOW_SHOT_CHANCE = 0.08
 
 export const COMBO_MAX = 5           // consecutive scoring shots multiply the score, up to this
 
-// Endless mode: a fresh column pushes in from the wall every PUSH_EVERY shots.
-export const PUSH_EVERY = 6
+// Endless mode starts this many columns deep; PUSH_EVERY_START above sets the wave pace.
 export const ENDLESS_START_DEPTH = 5
-
-// Puzzle mode: shots allowed per level = half the bubbles plus this.
-export const PUZZLE_EXTRA_SHOTS = 5
 
 // Pickups (Bricks and Balls style): a ＋ in the open field; a shot passing
 // through it loads a special as the next bubble.
@@ -94,7 +92,7 @@ export const PULLEY_MAX_SHIFT = 4
 // Hurry-up: with no shot for this long the wall blinks, then advances.
 export const HURRY_WARN_TICKS = 140  // ~11 s at TICK_MS
 export const HURRY_TICKS = 190       // ~15 s
-export const BLINK_TICKS = 4         // half-period of the warning blink, in ticks
+export const BLINK_TICKS = 8         // slower warning blink: fewer idle full-display refreshes
 
 // Level clear bonus and the harder path.
 export const BONUS_PER_SHOT = 20     // per shot under par (par = half the level's bubbles)

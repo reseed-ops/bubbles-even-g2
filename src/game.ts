@@ -59,6 +59,7 @@ export type Game = {
   phase: Phase
   mode: Mode
   difficulty: Difficulty
+  highLegibility: boolean // render ordinary colours as unambiguous digits
   stats: Stats
   field: Uint8Array        // 0 = empty, 1..MAX_TYPES = colour, STAR/RAINBOW/STONE specials; index = y * COLS + x
   cols: number             // playable width; field stride stays COLS
@@ -116,6 +117,7 @@ export function createGame(): Game {
     phase: 'splash',
     mode: 'pulley', // the default; classic is the opt-out
     difficulty: 'normal',
+    highLegibility: false,
     stats: emptyStats(),
     field: new Uint8Array(COLS * ROWS),
     cols: COLS,
@@ -464,6 +466,11 @@ export function continueGame(g: Game): boolean {
   g.queuedShot = false
   g.trail = []
   g.flash = []; g.falling = []; g.blast = []; g.effectFrame = 0
+  // Whatever the cleared columns were holding up falls with them.
+  if (dropDetached(g) > 0) {
+    g.effectFrames = EFFECT_FRAMES
+    g.effectFrame = EFFECT_FRAMES
+  }
   g.idleTicks = 0
   g.phase = 'play'
   return true
@@ -654,7 +661,8 @@ function floodColour(g: Game, start: number, colour: number): number[] {
 }
 
 // The cluster a landed bubble forms. A rainbow (or star) shot takes whichever
-// neighbouring colour gives the biggest cluster.
+// neighbouring colour gives the biggest cluster; a tie goes to the colour
+// found first in neighbour order.
 function clusterAt(g: Game, start: number): { cells: number[]; colour: number } {
   const type = g.field[start]
   if (isColour(type)) return { cells: floodColour(g, start, type), colour: type }
@@ -768,15 +776,13 @@ function startEffect(g: Game, removed: number): void {
   g.effectFrame = g.effectFrames
 }
 
-function settle(g: Game, x: number, y: number, type: number): void {
-  x = Math.min(x, wallFor(g, y))
+// What a landing at (x, y) takes off the board: the matched cluster, or a
+// star's sweep of the landed colour; a bomb blast, chaining through any bomb
+// it reaches (a blast takes ice and stone outright); and cracked ice beside
+// any of that. As side effects, whole ice beside a pop cracks, and mysteries
+// beside the landing or a pop show their colour.
+function poppedBy(g: Game, x: number, y: number, type: number): Set<number> {
   const at = idx(x, y)
-  g.field[at] = type
-  g.flying = null
-  g.trail = []
-  g.shots++
-
-  if (g.shotsLeft > 0) g.shotsLeft--
   const { cells: cluster, colour } = clusterAt(g, at)
 
   const popped = new Set<number>()
@@ -826,41 +832,35 @@ function settle(g: Game, x: number, y: number, type: number): void {
   const reveal = new Set<number>(edge)
   forEachNeighbour(x, y, (nx, ny) => reveal.add(idx(nx, ny)))
   for (const n of reveal) if (isMystery(g.field[n]) && !popped.has(n)) g.field[n] = mysteryColour(g.field[n])
+  return popped
+}
 
-  let removed = 0
-  if (popped.size) {
-    g.combo++
-    const times = comboMultiplier(g)
-    g.flash = []
-    g.falling = []
-    for (const c of popped) g.field[c] = 0
-    g.score += POP_POINTS * popped.size * times
-    g.flash.push(...popped)
-    const dropped = dropDetached(g)
-    g.score += dropPoints(dropped) * times
-    removed = popped.size + dropped
-    g.stats.popped += popped.size
-    g.stats.dropped += dropped
-    g.stats.biggestDrop = Math.max(g.stats.biggestDrop, dropped)
-    g.stats.longestCombo = Math.max(g.stats.longestCombo, g.combo)
-  } else {
+// Takes the popped bubbles off, drops what they were holding up, and pays
+// for both with the combo. Returns how many bubbles came off in all.
+function clearPopped(g: Game, popped: Set<number>): number {
+  if (!popped.size) {
     g.combo = 0
+    return 0
   }
+  g.combo++
+  const times = comboMultiplier(g)
+  g.flash = []
+  g.falling = []
+  for (const c of popped) g.field[c] = 0
+  g.score += POP_POINTS * popped.size * times
+  g.flash.push(...popped)
+  const dropped = dropDetached(g)
+  g.score += dropPoints(dropped) * times
+  g.stats.popped += popped.size
+  g.stats.dropped += dropped
+  g.stats.biggestDrop = Math.max(g.stats.biggestDrop, dropped)
+  g.stats.longestCombo = Math.max(g.stats.longestCombo, g.combo)
+  return popped.size + dropped
+}
 
-  // Pulley: the lighter side rises, the heavier sinks toward the shooter,
-  // and whatever that tears loose falls too.
-  if (g.mode === 'pulley' && rebalance(g)) {
-    if (!popped.size) { g.flash = []; g.falling = [] }
-    const dropped = dropDetached(g)
-    g.score += dropPoints(dropped) * comboMultiplier(g)
-    removed += dropped
-  }
-
-  if (removed) startEffect(g, removed)
-  else g.lastClear = 0
-
-  placePickup(g)
-
+// After a shot has settled and scored: the level clear, the loss check, and
+// the pressure each mode applies (shots in puzzle, waves in endless, the wall).
+function afterShot(g: Game): void {
   if (fieldEmpty(g)) {
     g.lastLevelShots = g.shots
     g.lastBonus = clearBonus(g.levelBubbles, g.shots)
@@ -889,14 +889,41 @@ function settle(g: Game, x: number, y: number, type: number): void {
     if (g.shots % pushEvery(g) === 0) {
       pushColumn(g)
       g.stats.bestWave = Math.max(g.stats.bestWave, g.level)
-      if (anyBubbleDead(g)) { endGame(g, false); return }
+      if (anyBubbleDead(g)) endGame(g, false)
     }
     return
   }
   if (g.shots % wallEvery(g) === 0) {
     advanceWall(g)
-    if (anyBubbleDead(g)) { endGame(g, false); return }
+    if (anyBubbleDead(g)) endGame(g, false)
   }
+}
+
+function settle(g: Game, x: number, y: number, type: number): void {
+  x = Math.min(x, wallFor(g, y))
+  g.field[idx(x, y)] = type
+  g.flying = null
+  g.trail = []
+  g.shots++
+  if (g.shotsLeft > 0) g.shotsLeft--
+
+  const popped = poppedBy(g, x, y, type)
+  let removed = clearPopped(g, popped)
+
+  // Pulley: the lighter side rises, the heavier sinks toward the shooter,
+  // and whatever that tears loose falls too.
+  if (g.mode === 'pulley' && rebalance(g)) {
+    if (!popped.size) { g.flash = []; g.falling = [] }
+    const dropped = dropDetached(g)
+    g.score += dropPoints(dropped) * comboMultiplier(g)
+    removed += dropped
+  }
+
+  if (removed) startEffect(g, removed)
+  else g.lastClear = 0
+
+  placePickup(g)
+  afterShot(g)
 }
 
 // The wall is about to move: the last shot before an advance, or the player
@@ -922,7 +949,9 @@ export function tick(g: Game, dt = 1): boolean {
   g.ticks += dt
   let changed = false
   if (g.effectFrame > 0) {
-    g.effectFrame = Math.max(0, g.effectFrame - dt)
+    // Effects are feedback, not simulation. Advance them by at most one stage
+    // per loop so a slow BLE acknowledgement cannot skip an entire burst.
+    g.effectFrame = Math.max(0, g.effectFrame - Math.min(1, dt))
     changed = true
     if (g.effectFrame === 0) {
       g.flash = []

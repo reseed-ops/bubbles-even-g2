@@ -8,16 +8,18 @@ import { aimAngle, aimPath, blinkOn, comboMultiplier, idx, isMystery, paceEvery,
 // Glyphs confirmed to be exactly one grid cell wide in the G2 firmware font
 // (see the ?test=font pages).
 export const EMPTY = '　'   // ideographic space: fullwidth, keeps the grid aligned
-const AIM_HORIZONTAL = '━'
+const AIM_HORIZONTAL = '─'
 const AIM_UP = '／'  // fullwidth slash: screen y decreases as the shot rises
 const AIM_DOWN = '＼'
-const AIM_VERTICAL = '┃'
-const TARGET = '◌'  // landing marker
+const AIM_VERTICAL = '│'
+const NEXT_AIM_HORIZONTAL = '━'
+const NEXT_AIM_VERTICAL = '┃'
+const TARGET = 'Ｘ'  // unique landing marker; fullwidth Latin is firmware-proven
 const WALL = '┃'
-const WALL_WARNING = '・' // the wall blinks to this when it is about to move
+const WALL_WARNING = '│' // retain the boundary while making its warning visibly lighter
 const WALL_PROGRESS = '┫'  // a tick on the wall, so the wall line stays unbroken
 const AXLE = '╋'    // pulley mode: the axle both groups hang from
-const DANGER = '・'
+const DANGER = '：' // visually a boundary, unlike the single-dot projectile trail
 const TRAIL = '・'
 const NEXT = '＞'
 const PICKUP = '＋'  // fly through it to load a special
@@ -27,9 +29,12 @@ const POP_BY_AGE = ['★', '◎', '◌', '・']
 const RING_BY_AGE = ['・', '◌', '・']
 const SPARKLE = ['★', '◎', '◌', '・']
 // Frozen Bubble's eight colours, then star, rainbow, stone, bomb, ice and cracked ice.
-export const BUBBLE = ['', '●', '○', '◎', '◆', '◇', '■', '□', '★', '☆', '※', '▩', '♨', '▦', '▤']
+export const BUBBLE = ['', '●', '○', '◎', '◆', '◇', '■', '□', '♥', '☆', '※', '▩', '♨', '▦', '▤']
+const LEGIBLE_COLOUR = ['', '１', '２', '３', '４', '５', '６', '７', '８']
 const MYSTERY = '？'
-export const glyphFor = (type: number): string => (isMystery(type) ? MYSTERY : BUBBLE[type] ?? MYSTERY)
+export const glyphFor = (type: number, highLegibility = false): string =>
+  (highLegibility && type >= 1 && type < LEGIBLE_COLOUR.length) ? LEGIBLE_COLOUR[type]
+    : isMystery(type) ? MYSTERY : BUBBLE[type] ?? MYSTERY
 void BOMB; void FROZEN; void CRACKED
 
 // Below this angle the line is flat, above the upper one it is upright;
@@ -48,15 +53,15 @@ function aimGlyphs(g: Game, path: number[]): string[] {
     // A change of vertical direction means the line bounced off an edge.
     if (row !== previousRow) rising = row < previousRow
     previousRow = row
-    if (shape === 'flat') return AIM_HORIZONTAL
-    if (shape === 'upright') return AIM_VERTICAL
+    if (shape === 'flat') return g.flying ? NEXT_AIM_HORIZONTAL : AIM_HORIZONTAL
+    if (shape === 'upright') return g.flying ? NEXT_AIM_VERTICAL : AIM_VERTICAL
     return rising ? AIM_UP : AIM_DOWN
   })
 }
 
 // The frame: ◈ corners with a ◇ flourish beside each, and light ─ and │
 // edges, the same thin stroke as the ◇, so the frame sits back behind the
-// game instead of competing with the heavy ━ aim line. All one cell wide in
+// game. All one cell wide in
 // the firmware font (sets 2, 11 and 14).
 const CORNER = '◈'
 const FLOURISH = '◇'
@@ -80,11 +85,11 @@ function framed(inner: string[]): string {
   return rows.join('\n')
 }
 
-// The playfield keeps its nine rows and gets the frame's floor underneath.
+// Gameplay uses only its nine meaningful rows. Omitting the decorative floor
+// removes a bright distraction and lets a banded renderer skip that region.
 function rowsToText(cells: string[]): string {
   const rows: string[] = []
   for (let y = 0; y < ROWS; y++) rows.push(cells.slice(y * COLS, (y + 1) * COLS).join(''))
-  rows.push(frameRule())
   return rows.join('\n')
 }
 
@@ -136,7 +141,9 @@ function gridCells(g: Game, overlay?: string): string[] {
   {
     const path = aimPath(g)
     const glyphs = aimGlyphs(g, path)
-    path.forEach((c, i) => { cells[c] = glyphs[i] })
+    // The current aim is continuous. During flight this is the *next* shot's
+    // guide, so half density gives it a clearly different visual weight.
+    path.forEach((c, i) => { if (!g.flying || i % 2 === 0) cells[c] = glyphs[i] })
     if (path.length) cells[path[path.length - 1]] = TARGET
   }
   for (const c of g.pickups) cells[c] = PICKUP
@@ -148,11 +155,11 @@ function gridCells(g: Game, overlay?: string): string[] {
   const popGlyph = POP_BY_AGE[age] ?? '◌'
   for (const c of g.flash) cells[c] = popGlyph
   for (let c = 0; c < g.field.length; c++) {
-    if (g.field[c]) cells[c] = glyphFor(g.field[c])
+    if (g.field[c]) cells[c] = glyphFor(g.field[c], g.highLegibility)
   }
   for (const falling of g.falling) {
     const y = falling.y + age
-    if (y >= 0 && y < ROWS) cells[idx(falling.x, y)] = glyphFor(falling.type)
+    if (y >= 0 && y < ROWS) cells[idx(falling.x, y)] = glyphFor(falling.type, g.highLegibility)
   }
   for (const c of g.trail) {
     if (!g.field[c]) cells[c] = TRAIL
@@ -164,13 +171,13 @@ function gridCells(g: Game, overlay?: string): string[] {
   const readout = g.mode === 'puzzle' ? fullwidthNumber(Math.max(0, g.shotsLeft))
     : comboMultiplier(g) > 1 ? 'Ｘ' + fullwidthNumber(comboMultiplier(g)) : ''
   ;[...readout].forEach((d, i) => { if (SHOOTER_Y + 1 + i < ROWS - 1) cells[idx(SHOOTER_X, SHOOTER_Y + 1 + i)] = d })
-  cells[idx(SHOOTER_X + 1, ROWS - 2)] = glyphFor(g.next2)
+  cells[idx(SHOOTER_X + 1, ROWS - 2)] = glyphFor(g.next2, g.highLegibility)
   cells[idx(SHOOTER_X, ROWS - 1)] = NEXT
-  cells[idx(SHOOTER_X + 1, ROWS - 1)] = glyphFor(g.next)
+  cells[idx(SHOOTER_X + 1, ROWS - 1)] = glyphFor(g.next, g.highLegibility)
   cells[idx(SHOOTER_X + 1, SHOOTER_Y)] = launcherGlyph(g)
-  cells[idx(SHOOTER_X, SHOOTER_Y)] = glyphFor(g.loaded)
+  cells[idx(SHOOTER_X, SHOOTER_Y)] = glyphFor(g.loaded, g.highLegibility)
   if (g.flying) {
-    cells[idx(Math.round(g.flying.x), Math.round(g.flying.y))] = glyphFor(g.flying.type)
+    cells[idx(Math.round(g.flying.x), Math.round(g.flying.y))] = glyphFor(g.flying.type, g.highLegibility)
   }
   if (overlay) [...overlay].forEach((ch, i) => { if (OVERLAY_X + i < COLS) cells[idx(OVERLAY_X + i, OVERLAY_Y)] = ch })
   return cells
@@ -213,7 +220,7 @@ function withStack(inner: string[]): string[] {
 }
 
 export function renderSplash(g: Game): string {
-  const demoShot = BUBBLE[1] + AIM_HORIZONTAL.repeat(INNER - 1 - [...TITLE_STACK[2]].length - 1) + TARGET
+  const demoShot = glyphFor(1, g.highLegibility) + AIM_HORIZONTAL.repeat(INNER - 1 - [...TITLE_STACK[2]].length - 1) + TARGET
   const start = g.levelReached > 1 ? `TAP: LEVEL ${g.startLevel} SWIPE: PICK` : 'TAP TO START' // fits three digits
   const mode = MODE_NAMES[g.mode].toUpperCase()
   const record = g.highScore > 0 ? `BEST ${g.highScore}` : g.mode === 'endless' ? 'WAVES FOREVER' : `${LEVEL_COUNT}+ LEVELS`

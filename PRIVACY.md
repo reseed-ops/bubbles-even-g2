@@ -5,10 +5,12 @@ Bubbles is a game for Even Realities G2 glasses. It collects no personal data.
 ## What the app stores
 
 The game keeps a few small values so you can carry on where you left off: your
-best score in each mode, the highest level you have reached, the mode you last
-chose and whether you prefer the short aim guide. They are saved through the
-Even app's local storage on your phone and never leave your phone. Removing
-the app removes them.
+best score in each mode, the highest level you have reached, the mode and
+difficulty you last chose, whether you prefer shapes or digits for the
+bubbles, and a handful of lifetime play counts (games, shots, bubbles popped
+and dropped, biggest drop, longest combo, levels cleared, pickups taken, best
+endless wave). They are saved through the Even app's local storage on your
+phone and never leave your phone. Removing the app removes them.
 
 ## What the app does not do
 
@@ -31,4 +33,4 @@ updated first and the change will be described in that version's notes.
 Questions and concerns: open an issue at
 https://github.com/reseed-ops/bubbles-even-g2/issues.
 
-Last updated 24 October 2026.
+Last updated 26 October 2026.

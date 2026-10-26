@@ -5,8 +5,14 @@ import { EMPTY } from './grid.ts'
 import { createGame, MODES, type Difficulty, type Mode } from './game.ts'
 import { renderSplash } from './grid.ts'
 import { COLS, SCREEN_ROWS } from './layout.ts'
+import type { RenderMode } from './renderer.ts'
 
-const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T
+const elementCache = new Map<string, HTMLElement>()
+const $ = <T extends HTMLElement>(id: string): T => {
+  let el = elementCache.get(id)
+  if (!el) { el = document.getElementById(id) as HTMLElement; elementCache.set(id, el) }
+  return el as T
+}
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -24,6 +30,14 @@ const rows: HTMLDivElement[] = Array.from({ length: SCREEN_ROWS }, () => {
   lens.appendChild(row)
   return row
 })
+const modeButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-mode]')]
+const difficultyButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-difficulty]')]
+const legibilityButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-legibility]')]
+const rendererButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-renderer]')]
+const setText = (id: string, value: string) => {
+  const el = $(id)
+  if (el.textContent !== value) el.textContent = value
+}
 
 // Straight line glyphs are drawn as CSS lines so they join across cells,
 // as the firmware font's box-drawing glyphs do on the glasses.
@@ -55,60 +69,96 @@ function drawLens(screen: string): void {
 }
 
 function setStatus(text: string, connected: boolean): void {
-  $('status-text').textContent = text
+  setText('status-text', text)
   $('status').classList.toggle('on', connected)
 }
 
-function render(status: Status): void {
+let lastScreen = ''
+function renderNow(status: Status): void {
+  const renderStarted = performance.now()
   setStatus(status.text, status.page !== null)
-  drawLens(status.screen)
-  $('level').textContent = String(status.level)
-  $('score').textContent = status.score.toLocaleString()
-  $('best').textContent = status.best.toLocaleString()
-  $('aim').textContent = `${status.aim > 0 ? '+' : ''}${status.aim}°`
-  $('pace-label').textContent = status.pace.label
-  $('pace').textContent = status.pace.value
-  $('push-ms').textContent = status.frame ? `${status.frame.ms} ms` : '–'
-  $('fps').textContent = status.frame ? `${status.frame.fps}/s` : '–'
-  $('skipped').textContent = status.frame ? `${Math.round(status.frame.skipped * 100)}%` : '–'
-  $('push-cost').textContent = status.pushCost ?? 'Not measured yet. A game in progress pauses while it runs.'
+  if (status.screen !== lastScreen) { drawLens(status.screen); lastScreen = status.screen }
+  setText('level', String(status.level))
+  setText('score', status.score.toLocaleString())
+  setText('best', status.best.toLocaleString())
+  setText('aim', `${status.aim > 0 ? '+' : ''}${status.aim}°`)
+  setText('pace-label', status.pace.label)
+  setText('pace', status.pace.value)
+  setText('push-ms', status.frame ? `${status.frame.ms} ms` : '–')
+  setText('fps', status.frame ? `${status.frame.fps}/s` : '–')
+  setText('skipped', status.frame ? `${Math.round(status.frame.skipped * 100)}%` : '–')
+  setText('render-path', status.renderMode === 'bands' ? 'Dirty bands' : 'Full screen')
+  setText('grid-ms', `${status.renderMs.toFixed(2)} ms`)
+  setText('push-cost', status.pushCost ?? 'Not measured yet. A game in progress pauses while it runs.')
   $<HTMLButtonElement>('new-game').disabled = status.page === null
   $<HTMLButtonElement>('center-aim').disabled = status.phase !== 'play'
   $<HTMLButtonElement>('measure').disabled = status.page === null
   const connected = status.page !== null
-  document.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((b) => {
+  modeButtons.forEach((b) => {
     b.disabled = !connected
     b.setAttribute('aria-pressed', String(b.dataset.mode === status.mode))
   })
-  document.querySelectorAll<HTMLButtonElement>('[data-difficulty]').forEach((b) => {
+  difficultyButtons.forEach((b) => {
     b.disabled = !connected
     b.setAttribute('aria-pressed', String(b.dataset.difficulty === status.difficulty))
+  })
+  legibilityButtons.forEach((b) => {
+    b.disabled = !connected
+    b.setAttribute('aria-pressed', String((b.dataset.legibility === 'numbers') === status.highLegibility))
+  })
+  rendererButtons.forEach((b) => {
+    b.disabled = !connected
+    b.setAttribute('aria-pressed', String(b.dataset.renderer === status.renderMode))
   })
   const levelInput = $<HTMLInputElement>('start-level')
   levelInput.disabled = !connected || status.phase === 'play' || status.mode === 'endless'
   levelInput.max = String(status.levelReached)
   if (document.activeElement !== levelInput) levelInput.value = String(status.level)
-  $('level-reached').textContent = status.mode === 'endless' ? 'waves start at 1' : `of ${status.levelReached} reached`
+  setText('level-reached', status.mode === 'endless' ? 'waves start at 1' : `of ${status.levelReached} reached`)
   const s = status.stats
-  $('st-games').textContent = s.games.toLocaleString()
-  $('st-shots').textContent = s.shots.toLocaleString()
-  $('st-popped').textContent = s.popped.toLocaleString()
-  $('st-dropped').textContent = s.dropped.toLocaleString()
-  $('st-biggest').textContent = String(s.biggestDrop)
-  $('st-combo').textContent = s.longestCombo ? `×${Math.min(5, s.longestCombo)}` : '0'
-  $('st-levels').textContent = s.levelsCleared.toLocaleString()
-  $('st-pickups').textContent = s.pickups.toLocaleString()
-  $('st-wave').textContent = String(s.bestWave)
+  setText('st-games', s.games.toLocaleString())
+  setText('st-shots', s.shots.toLocaleString())
+  setText('st-popped', s.popped.toLocaleString())
+  setText('st-dropped', s.dropped.toLocaleString())
+  setText('st-biggest', String(s.biggestDrop))
+  setText('st-combo', s.longestCombo ? `×${Math.min(5, s.longestCombo)}` : '0')
+  setText('st-levels', s.levelsCleared.toLocaleString())
+  setText('st-pickups', s.pickups.toLocaleString())
+  setText('st-wave', String(s.bestWave))
+  setText('phone-ms', `${(performance.now() - renderStarted).toFixed(2)} ms`)
 }
+
+// The phone mirror is useful but need not repaint at glasses-frame cadence.
+// Coalesce status bursts to 4 Hz, and do no DOM work while the page is hidden.
+let pendingStatus: Status | null = null
+let renderTimer: number | null = null
+function render(status: Status): void {
+  pendingStatus = status
+  if (document.hidden || renderTimer !== null) return
+  renderTimer = window.setTimeout(() => {
+    renderTimer = null
+    if (pendingStatus && !document.hidden) { const latest = pendingStatus; pendingStatus = null; renderNow(latest) }
+  }, 250)
+}
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && pendingStatus) {
+    if (renderTimer !== null) window.clearTimeout(renderTimer)
+    renderTimer = null
+    const latest = pendingStatus
+    pendingStatus = null
+    renderNow(latest)
+  }
+})
 
 async function boot(): Promise<void> {
   $('version').textContent = `v${__APP_VERSION__}`
   drawLens(renderSplash(createGame())) // the lens is never blank, even before the glasses answer
   const params = new URLSearchParams(location.search)
+  const dev = import.meta.env.DEV   // developer URLs work on the dev server only; the packed build ignores them
   let app: App
   try {
     const bridge = await withTimeout(waitForEvenAppBridge(), 8000)
-    if (params.get('test') === 'font') {
+    if (dev && params.get('test') === 'font') {
       const set = Number(params.get('set') ?? 1)
       const text = await runFontTest(bridge, set)
       setStatus(`Font test ${set}: ${GLYPH_SETS[set - 1]?.join(' ') ?? ''}`, true)
@@ -124,17 +174,23 @@ async function boot(): Promise<void> {
 
   const mode = params.get('mode')
   if (MODES.includes(mode as Mode)) app.setMode(mode as Mode)
-  const level = Number(params.get('level'))   // developer aid: unlock and pick a start level
-  if (level > 1) { app.game.levelReached = Math.max(app.game.levelReached, level); app.setStartLevel(level) }
-  if (params.get('measure') === '1') setTimeout(() => app.measurePush(), 1500)   // developer aid: run the push-cost test once connected
-  const preview = params.get('preview')
-  if (preview === 'over' || preview === 'won' || preview === 'title' || preview === 'blast' || preview === 'specials' || preview === 'card') app.preview(preview)
+  if (dev) {
+    const renderer = params.get('renderer')
+    if (renderer === 'full' || renderer === 'bands') app.setRenderer(renderer)
+    const level = Number(params.get('level'))   // unlock and pick a start level
+    if (level > 1) { app.game.levelReached = Math.max(app.game.levelReached, level); app.setStartLevel(level) }
+    if (params.get('measure') === '1') setTimeout(() => app.measurePush(), 1500)   // run the push-cost test once connected
+    const preview = params.get('preview')
+    if (preview === 'over' || preview === 'won' || preview === 'title' || preview === 'blast' || preview === 'specials' || preview === 'card') app.preview(preview)
+  }
 
   $('new-game').onclick = () => app.newGame()
   $('center-aim').onclick = () => app.centerAim()
   $('measure').onclick = () => app.measurePush()
-  document.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((b) => { b.onclick = () => app.setMode(b.dataset.mode as Mode) })
-  document.querySelectorAll<HTMLButtonElement>('[data-difficulty]').forEach((b) => { b.onclick = () => app.setDifficulty(b.dataset.difficulty as Difficulty) })
+  modeButtons.forEach((b) => { b.onclick = () => app.setMode(b.dataset.mode as Mode) })
+  difficultyButtons.forEach((b) => { b.onclick = () => app.setDifficulty(b.dataset.difficulty as Difficulty) })
+  legibilityButtons.forEach((b) => { b.onclick = () => app.setHighLegibility(b.dataset.legibility === 'numbers') })
+  rendererButtons.forEach((b) => { b.onclick = () => app.setRenderer(b.dataset.renderer as RenderMode) })
   const levelInput = $<HTMLInputElement>('start-level')
   levelInput.onchange = () => app.setStartLevel(Number(levelInput.value))
 }

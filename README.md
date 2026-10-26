@@ -10,15 +10,17 @@ edge, and the touchpad.
 - **Tap, then hold** to open the G2 contextual menu, where you can restart or center the aim.
 - **Double tap** to open the G2 system exit confirmation from any screen.
 - **Tap, then hold** also switches mode (classic, pulley, endless, puzzle) and
-  cycles the difficulty.
+  cycles the difficulty or switches the ordinary bubbles between shapes and
+  high-legibility digits.
 - **Swipe on the title or game-over screen** to pick the level to start on, up to
   the highest level you have reached. A returning player starts where they got
   to; after a game over, "play again" continues on the same level. Starting
   higher always starts at score 0.
 
-The aim guide ends in a landing marker and stays up while a shot is in
+The light aim guide ends in an Ｘ landing marker and stays up while a shot is in
 flight, so you can line up the next one straight away: the moment a bubble
-leaves, the queued bubble moves into the launcher and the line is its line.
+leaves, the queued bubble moves into the launcher and the guide becomes a
+half-density heavy line, making it visibly the *next* shot's line.
 During the flight the prediction is against the board as it stands; it
 corrects itself when the shot lands. Clearing a board gets a short level card
 before the next layout appears,
@@ -46,11 +48,13 @@ frame and a ring of empty cells ripples outward; ten or more gets two rings.
 From level 3 the layouts carry a few specials, drawn with glyphs the firmware
 font has. A star ☆: a shot that lands next to it clears every bubble of the
 shot's colour. A rainbow ※ joins any colour, so it bridges matches; the odd
-shot is a rainbow too, and it takes whichever neighbouring colour pops most.
-A bomb ♨ (from level 4): a shot landing beside it blows away everything
-around it, and any bomb caught in the blast goes off too. Ice ▦ (from level
-5): a pop beside it cracks it to ▤, a second pop frees it. A stone ▩ (from
-level 6) never pops and only falls when nothing holds it. Mystery bubbles ？
+shot is a rainbow too, and it takes whichever neighbouring colour pops most
+(a tie goes to the colour found first). A bomb ♨ (from level 4): a shot
+landing beside it blows away everything around it, ice and stone included,
+and any bomb caught in the blast goes off too. Ice ▦ (from level 5): a pop
+beside it cracks it to ▤, a second pop frees it; only a bomb takes it in one.
+A stone ▩ (from level 6) never pops and only falls when nothing holds it,
+unless a bomb goes off beside it. Mystery bubbles ？
 are ordinary colours hidden until a shot lands or a pop happens beside them.
 
 ### Pickups and the second chance
@@ -165,33 +169,35 @@ makes this project GPL-2.0 as a whole.
 
 ## How it is drawn
 
-The app uses one native 576 × 288 text container for its whole lifetime. The
-title, gameplay, level-clear card and game-over screen all update that same
-container with `textContainerUpgrade`, avoiding page rebuilds and large image
-transfers over BLE.
+The app keeps four native horizontal text bands for its whole lifetime. Most
+flight frames change only one three-row band, so `textContainerUpgrade` need
+not refresh the full 576 × 288 display. A hidden full-screen container remains
+as a fallback and as the baseline for the on-device benchmark. Neither path
+rebuilds the page or transfers images over BLE.
 
 The playfield is a 28 × 9 grid of fullwidth characters. An ideographic space
 keeps empty cells aligned in the proportional system font. The eight bubble
-types are ● ○ ◎ ◆ ◇ ■ □ ★. The aim guide is drawn with ━, ／, ＼ or ┃
-chosen from the aim angle (flat below 12°, upright above 58°, a slash in
-between, flipping at each bounce), so a diagonal aim reads as one continuous
-line; ◌ marks the predicted landing cell and the wall is ┃. These effects are
+types are ● ○ ◎ ◆ ◇ ■ □ ♥, with an optional １–８ accessibility set. The
+current aim guide is drawn with light ─, ／, ＼ or │ glyphs chosen from the aim
+angle (flat below 12°, upright above 58°, a slash in between, flipping at each
+bounce). During flight the next-shot guide is half-density and uses a heavy
+horizontal or vertical stroke. Ｘ marks the predicted landing cell and the
+wall is ┃. These effects are
 still characters in the same container—there are no image transfers.
 
-The display fits ten rows of the grid. The playfield uses nine and the tenth
-carries the frame's floor: an ornate rule with ◈ corners and ◇ flourishes.
+The display fits ten rows of the grid. Gameplay uses nine and deliberately
+leaves the tenth blank, reducing clutter and allowing its band to stay idle.
 The title, level card and game-over screens are fully framed (◈◇ corners,
-light ─ and │ edges so the frame sits back from the heavy ━ aim line, a ◇
+light ─ and │ edges, a ◇
 flourish at the top and bottom of each side) and set
 entirely in fullwidth capitals, which the firmware font has at exactly one
 cell, so every row of every screen is a grid row. `fullwidth()` in
-`src/grid.ts` converts ASCII to those forms. The grid is
-only regenerated when gameplay or aim state changes. Updates that arrive while
-a previous BLE write is still in flight are dropped; the next tick sends the
-newest state instead of building a stale frame queue. Every update sends the
-whole screen: `contentOffset`/`contentLength` on a text upgrade are not a
-splice, and the simulator shows only the text sent, drawn from the top, so a
-changed-span update leaves the rest of the display blank.
+`src/grid.ts` converts ASCII to those forms. The grid is only regenerated when
+gameplay or aim state changes. Updates that arrive while a previous BLE write
+is still in flight are dropped; the next tick sends the newest state instead
+of building a stale frame queue. Changed rows are sent through their complete
+band: `contentOffset`/`contentLength` are not a splice, so partial text inside
+one container would leave the rest of that container blank.
 
 The app does not start the IMU sensor. Aim is controlled entirely by swipe
 events, eliminating calibration drift and saving the work of a continuous
@@ -214,10 +220,12 @@ double-tap reserved for the required system exit dialog.
 | `scripts/run.sh`, `scripts/dev-env.sh` | Find or create the Linux-side build directory and run the toolchain there. |
 | `scripts/simulator.sh` | Headless simulator with the automation API. |
 | `src/events.ts` | Normalises glasses, ring and simulator events into inputs. |
-| `src/renderer.ts` | The persistent full-screen text page and text pushes over the bridge. |
+| `src/renderer.ts` | Persistent dirty-row bands, the full-screen fallback and text pushes over the bridge. |
 | `src/app.ts` | Game loop, input handling and high-score persistence. |
 | `src/main.ts`, `index.html` | The phone page: a live mirror of the glasses, status, score and controls. |
 | `test/game.test.js` | Logic tests: popping, dropping, aim prediction, all 100 levels, random games. |
+| `test/events.test.js` | Input tests: every event shape the glasses and simulator send, and what is dropped. |
+| `.github/workflows/ci.yml` | GitHub Actions: type-check, build and run the tests on every push. |
 | `app.json` | Even Hub manifest. |
 | `store-description.txt` | The Even Hub listing text; `evenhub update --description-file` uploads it. |
 | `public/icon.png` | 24 × 24 icon drawn in 2 × 2 blocks, as the glasses show it. |
@@ -240,7 +248,7 @@ npm run dev            # Vite dev server on port 5180, reachable on the LAN
 npm run simulate       # Even Hub simulator pointed at the dev server
 npm run simulate:headless  # same, on a virtual display with the automation API (see below)
 npm run qr             # QR code for the glasses; scan it in the Even app (Developer Mode)
-npm test               # game logic tests
+npm test               # game logic and input tests (CI runs these on every push)
 npm run build          # type-check and bundle to dist/
 npm run pack           # build and produce bubbles.ehpk for Even Hub
 ```
@@ -273,17 +281,20 @@ reference for glyph widths.
 ### The phone page
 
 While the game runs on the glasses, the Even app shows `index.html`. It
-mirrors the display in a 2:1 lens: every line of the screen text is one of
-nine rows, and a 28-glyph line is laid out as 28 equal cells, so the grid
-stays square whatever fonts the phone has. Straight line glyphs (━ ┃ ┫) are
+mirrors the display in a 2:1 lens: each 28-glyph line is laid out as 28 equal
+cells across the display's ten possible rows, so the grid stays square
+whatever fonts the phone has. Straight line glyphs (━ ─ ┃ │ ┫) are
 drawn as CSS lines so they join across cells as the firmware font's
 box-drawing glyphs do. Under the lens are the connection
 state and what the game is doing, level, score, best, exact aim angle and wall
-countdown, two buttons
+countdown, shape/number legibility controls, two buttons
 (New game, Center aim) and the gesture guide. The green is reserved for the
 lens; the rest of the page is grey.
 
 ### Developer URLs
+
+These work on the development server (`npm run dev`) only; the packed build
+ignores them, apart from `?mode=`, which is a player setting.
 
 - `?test=font&set=1` to `set=16`: draws rows of candidate glyphs, 27 per row
   plus the wall character. Rows whose wall lines up with the first
@@ -299,26 +310,24 @@ lens; the rest of the page is grey.
   with a rainbow queued (plus a bomb, ice and a mystery, and a running combo);
   `?mode=classic|pulley|endless|puzzle` picks the mode; `?level=137` unlocks
   and picks a start level; `?preview=over` shows the game over with the
-  continue offer; `?measure=1` runs the push-cost measurement once connected.
+  continue offer; `?renderer=bands|full` selects the display update path;
+  `?measure=1` compares their push cost once connected.
 
 ## Known limits
 
 - Frame rate is bounded by the BLE text-update path. Measured on G2 glasses
-  (October 2026), a whole-screen push takes 110 to 170 ms from send to
-  acknowledgement and the glasses accept one at a time, so the game displays
-  6 to 9 frames per second. Probes showed the cost is a fixed per-push part
-  (55 to 108 ms, varying by session) plus about 65 ms to refresh the display
-  area: a blank grid, a grid of 280 dots and a real board all cost the same,
-  and a third fewer bytes changed nothing, so payload tricks do not help.
-  Letting two pushes be in flight made it worse (19% dropped frames), so the
-  loop waits for each push. The phone page has a Diagnostics fold with the
-  measured push time, frames per second and skipped share, and a "Measure
-  push cost" button that times six probe screens; a game in progress pauses
-  while it runs.
-- Motion is time based. The loop passes the real time elapsed since the last
-  tick, in units of `TICK_MS` (100 ms), so a shot covers the same distance per
-  second at 6 frames per second as it would at 12. A stall longer than three
-  ticks is capped so the shot never teleports.
+  (October 2026), a whole-screen push takes 110 to 170 ms and accepts one write
+  at a time. Payload size and glyph density did not materially change that.
+  Gameplay therefore defaults to four dirty horizontal bands; most flight
+  frames refresh one three-row band. Dirty bands are still serialized when
+  several change. The phone page can switch to the full-screen fallback, and
+  its benchmark compares a whole-screen refresh with one dirty band on the
+  attached firmware. Concurrent writes remain disabled because they measured
+  worse and dropped frames.
+- Motion remains time based, but the app caps visible advance to roughly two
+  cells per acknowledged frame so a slow connection does not make a shot
+  teleport. Effects advance by at most one stage per displayed loop, ensuring
+  that their important feedback frames remain visible.
 - A shot stops only on real contact: head-on or directly alongside a bubble, or
   at the wall. Diagonal cells are 1.4 diameters apart, so a shot slides past a
   corner instead of catching on it. Hanging and matching still use all eight

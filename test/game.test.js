@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { COLS, ROWS, SCREEN_ROWS, DEAD_COL, SHOOTER_X, SHOOTER_Y, MAX_ANGLE_DEG, SWIPE_AIM_DEG, SHOTS_PER_WALL_ADVANCE, STAR, RAINBOW, STONE, BOMB, FROZEN, CRACKED, MYSTERY_BASE, PUSH_EVERY, COMBO_MAX, HURRY_TICKS, HURRY_WARN_TICKS, SKIP_POINTS, LEVEL_POINTS } from '../src/layout.ts'
+import { COLS, ROWS, SCREEN_ROWS, DEAD_COL, SHOOTER_X, SHOOTER_Y, MAX_ANGLE_DEG, SWIPE_AIM_DEG, STAR, RAINBOW, STONE, BOMB, FROZEN, CRACKED, MYSTERY_BASE, COMBO_MAX, HURRY_TICKS, HURRY_WARN_TICKS, SKIP_POINTS, LEVEL_POINTS } from '../src/layout.ts'
 import { createGame, chooseStartLevel, dropPoints, clearBonus, skipLevel, startGame, setAim, fire, tick, aimPath, idx, nudgeAim, nudgeToNextLanding, aimAngle, fillLevel, wallFor, wallWarning, isColour, isMystery, mysteryColour, swapBubbles, continueGame, wallEvery, pushEvery, hurryTicks, generateLevel, layoutFor, comboMultiplier, puzzleShots, MODES, LEVEL_COUNT } from '../src/game.ts'
 import { LEVELS, LEVEL_DEPTH } from '../src/levels.ts'
 import { BUBBLE, renderGrid, renderSplash, renderLevelCard, renderGameOver, renderFireworks, fullwidthNumber, fullwidth } from '../src/grid.ts'
@@ -100,7 +100,7 @@ test('the aim line ends exactly where the bubble settles', () => {
     assert.ok(fire(g), 'a tap while a bubble is flying is accepted as a queued shot')
     g.queuedShot = false // not under test here
     assert.equal(g.loaded, queued, 'the queued bubble is in the launcher during the flight')
-    assert.ok(renderGrid(g).includes('◌') && /[▶◥◢]/.test(renderGrid(g)), 'the aim line and launcher stay up in flight')
+    assert.ok(renderGrid(g).includes('Ｘ') && /[▶◥◢]/.test(renderGrid(g)), 'the aim line and launcher stay up in flight')
     let n = 0
     while (g.flying && n++ < 200) tick(g)
     assert.equal(g.flying, null)
@@ -178,7 +178,7 @@ test('random play keeps invariants and always ends or clears', () => {
       while (g.flying && n++ < 400) { tick(g); checkInvariants(g) }
       assert.equal(g.flying, null, 'bubble must settle')
       const text = renderGrid(g)
-      assert.equal(text.split('\n').length, SCREEN_ROWS)
+      assert.equal(text.split('\n').length, ROWS)
       for (const row of text.split('\n')) assert.equal([...row].length, COLS)
       shots++
     }
@@ -275,7 +275,7 @@ test('bombs, ice and mysteries', () => {
   m.field[idx(w, SHOOTER_Y)] = MYSTERY_BASE + 6; m.field[idx(w, 0)] = 1
   m.loaded = 2; shoot(m)
   assert.equal(m.field[idx(w, SHOOTER_Y)], 6, 'revealed')
-  assert.ok(renderGrid(m).includes('□') || true)
+  assert.equal(renderGrid(m).split('\n').map((row) => [...row])[SHOOTER_Y][w], BUBBLE[6], 'the revealed colour is drawn in its cell')
   const n = classic(); startGame(n); n.field.fill(0); n.field[idx(w, 0)] = MYSTERY_BASE + 7
   assert.ok(renderGrid(n).includes('？'), 'hidden bubbles draw as a question mark')
 })
@@ -318,7 +318,7 @@ test('endless mode pushes columns instead of moving the wall; puzzle mode limits
   for (let c = 0; c < g.field.length; c++) if (g.field[c]) count++
   assert.equal(count, ROWS * 5, 'five full columns to start')
   checkInvariants(g)
-  for (let i = 0; i < PUSH_EVERY; i++) { setAim(g, (i % 2 ? 1 : -1) * 65); fire(g); let n = 0; while (g.flying && n++ < 400) tick(g) }
+  for (let i = 0; i < pushEvery(g); i++) { setAim(g, (i % 2 ? 1 : -1) * 65); fire(g); let n = 0; while (g.flying && n++ < 400) tick(g) }
   assert.equal(g.wallCol, w, 'the wall does not move in endless')
   assert.equal(g.level, 2, 'a wave pushed in')
   assert.ok(wallWarning(createGame()) === false)
@@ -363,8 +363,8 @@ test('pickups load a special when flown through; bomb and star shots work', () =
   g.loaded = 3; g.next = 4
   assert.ok(renderGrid(g).includes('＋'))
   shoot(g)
-  assert.ok(![RAINBOW, BOMB, STAR].includes(g.loaded) || true)
-  assert.ok([RAINBOW, BOMB, STAR].includes(g.next) || [RAINBOW, BOMB, STAR].includes(g.loaded), 'flying through it loaded a special')
+  assert.equal(g.loaded, 4, 'the bubble already in the launcher is unchanged')
+  assert.ok([RAINBOW, BOMB, STAR].includes(g.next), 'flying through it loaded a special as the next bubble')
   assert.ok(!g.pickups.includes(cell), 'the pickup is gone')
 
   // A bomb shot goes off where it lands.
@@ -423,6 +423,22 @@ test('one continue per game clears the nearest columns and makes the run unranke
   assert.ok(!continueGame(g), 'only once')
   const won = classic(); won.phase = 'over'; won.won = true
   assert.ok(!continueGame(won), 'no continue after a win')
+})
+
+test('a continue drops whatever the cleared columns were holding up', () => {
+  const g = classic(); startGame(g)
+  g.field.fill(0)
+  g.field[idx(g.wallCol, 0)] = 1
+  // A chain hanging from a bubble in the loss zone: the continue clears its anchor.
+  for (let x = 1; x <= DEAD_COL + 4; x++) g.field[idx(x, SHOOTER_Y + 1)] = 2
+  g.phase = 'over'; g.won = false
+  assert.ok(continueGame(g))
+  assert.equal(g.field[idx(DEAD_COL + 3, SHOOTER_Y + 1)], 0, 'nothing is left hanging in mid-air')
+  assert.equal(g.field[idx(DEAD_COL + 4, SHOOTER_Y + 1)], 0)
+  assert.equal(g.falling.length, 2, 'the loose bubbles fall')
+  assert.ok(g.effectFrame > 0, 'and are animated')
+  assert.equal(g.field[idx(g.wallCol, 0)], 1, 'what hangs from the wall stays')
+  checkInvariants(g)
 })
 
 test('difficulty sets the wall pace and hurry-up; endless waves tighten', () => {
@@ -549,7 +565,7 @@ test('hurry-up: an idle wall blinks, then advances', () => {
   assert.equal(g.idleTicks, 0)
   assert.ok(!wallWarning(g))
   fire(g); assert.equal(g.idleTicks, 0, 'a shot resets the timer')
-  g.shots = SHOTS_PER_WALL_ADVANCE - 1
+  g.shots = wallEvery(g) - 1
   assert.ok(wallWarning(g), 'the last shot before an advance warns too')
 })
 
@@ -594,16 +610,30 @@ test('shooter cell shows the loaded bubble and aim dots are drawn', () => {
   assert.notEqual(shooterRow[SHOOTER_X], '　')
   assert.equal(shooterRow[SHOOTER_X + 1], '▶')
   const target = path[path.length - 1]
-  assert.equal([...rows[Math.floor(target / COLS)]][target % COLS], '◌', 'landing cell is marked')
+  assert.equal([...rows[Math.floor(target / COLS)]][target % COLS], 'Ｘ', 'landing cell is marked')
   assert.ok(rows.every((r) => [...r].length === COLS))
 
   const queued = g.next
   fire(g)
   tick(g) // the shot has left the launcher cell
   const inFlight = renderGrid(g).split('\n')
-  assert.ok(inFlight.join('').includes('◌'), 'the guide stays up during flight')
+  assert.ok(inFlight.join('').includes('Ｘ'), 'the guide stays up during flight')
+  assert.ok(inFlight.join('').includes('━　━'), 'the next-shot guide has a distinct half-density style')
   assert.equal([...inFlight[SHOOTER_Y]][SHOOTER_X], BUBBLE[queued], 'the launcher now holds the queued bubble')
   assert.equal([...inFlight[SHOOTER_Y]][SHOOTER_X + 1], '▶')
+})
+
+test('high-legibility mode renders ordinary colours as digits but keeps specials distinct', () => {
+  const g = classic(); startGame(g)
+  g.highLegibility = true
+  g.field.fill(0)
+  g.field[idx(g.wallCol, 0)] = 1
+  g.field[idx(g.wallCol, 1)] = 8
+  g.field[idx(g.wallCol, 2)] = STAR
+  g.loaded = 4
+  const text = renderGrid(g)
+  assert.ok(text.includes('１') && text.includes('８') && text.includes('４'))
+  assert.ok(text.includes(BUBBLE[STAR]), 'special glyphs are unchanged')
 })
 
 test('a tap during a flight queues the next shot', () => {
@@ -729,8 +759,8 @@ test('the level reads down the top-left corner in fullwidth digits', () => {
 test('text playfield has launcher, trail, danger line, wall meter and next indicator', () => {
   const g = classic(); startGame(g)
   let rows = renderGrid(g).split('\n').map((row) => [...row])
-  assert.equal(rows[0][DEAD_COL - 1], '・', 'loss boundary is visible')
-  assert.equal(rows[g.shots % SHOTS_PER_WALL_ADVANCE][g.wallCol + 1], '┫', 'wall carries the shot-count marker')
+  assert.equal(rows[0][DEAD_COL - 1], '：', 'loss boundary is visible')
+  assert.equal(rows[g.shots % wallEvery(g)][g.wallCol + 1], '┫', 'wall carries the shot-count marker')
   assert.equal(rows[ROWS - 1][0], '＞', 'next bubble has a label')
   assert.equal(rows[ROWS - 1][1], BUBBLE[g.next])
   assert.equal(rows[SHOOTER_Y][1], '▶', 'centered launcher points right')
@@ -749,19 +779,19 @@ test('aim guide uses directional line glyphs', () => {
   const field = (text) => text.split('\n').slice(0, ROWS).join('\n') // without the frame's floor
   let grid = field(renderGrid(g))
   assert.ok(grid.includes('／'), 'upward shots use rising diagonals')
-  assert.ok(!grid.includes('━'), 'a diagonal aim is drawn as one continuous slash line')
+  assert.ok(!grid.includes('─'), 'a diagonal aim uses slash glyphs')
   setAim(g, -30)
   assert.ok(renderGrid(g).includes('＼'), 'downward shots use falling diagonals')
   setAim(g, 0)
   grid = field(renderGrid(g))
-  assert.ok(grid.includes('━'), 'level shots use horizontal lines')
+  assert.ok(grid.includes('─'), 'level shots use light horizontal lines')
   assert.ok(!grid.includes('／') && !grid.includes('＼'), 'a level aim has no slashes')
   setAim(g, 70)
   const path = aimPath(g)
   const bounced = renderGrid(g)
   assert.ok(path.length > ROWS, 'a steep aim bounces')
-  const uprights = [...bounced].filter((ch) => ch === '┃').length
-  assert.ok(uprights > ROWS, 'a near-vertical aim is drawn upright (more ┃ than the wall alone)')
+  const uprights = [...bounced].filter((ch) => ch === '│').length
+  assert.ok(uprights > 0, 'a near-vertical aim is drawn with light uprights')
 })
 
 test('title and end screens use the grid rows and exact copy', () => {
@@ -772,7 +802,7 @@ test('title and end screens use the grid rows and exact copy', () => {
   assert.ok(splash[0].startsWith('◈◇─') && splash[0].endsWith('─◇◈') && splash[0] === splash.at(-1), 'ornate light rule top and bottom')
   assert.ok(splash[1].startsWith('◇') && splash[2].startsWith('│') && splash[8].endsWith('◇'), 'flourished corners, light sides')
   assert.ok(splash[1].includes('ＢＵＢＢＬＥＳ'), 'the name is set in fullwidth letters on the grid')
-  assert.ok(splash[3].includes('●━') && splash[3].includes('━◌'), 'the demo shot has a shooter and landing marker')
+  assert.ok(splash[3].includes('●─') && splash[3].includes('─Ｘ'), 'the demo shot has a shooter and landing marker')
   assert.ok(splash[8].includes(fw('CLASSIC   100+ LEVELS')), 'no best score shows the level count')
   g.highScore = 420
   assert.ok(renderSplash(g).split('\n')[8].includes(fw('CLASSIC   BEST 420')))
@@ -830,6 +860,9 @@ test('tick scales motion, effects and the hurry clock by elapsed time', () => {
     tick(c, 0.5)
     assert.equal(c.effectFrame, frames - 0.5, 'effects count down in fractional ticks')
     assert.ok(renderGrid(c).length > 0, 'a fractional effect age still renders')
+    const visibleStage = c.effectFrame
+    tick(c, 2.5)
+    assert.equal(c.effectFrame, Math.max(0, visibleStage - 1), 'a slow display cannot skip effect stages')
   }
 
   const d = classic(); d.mode = 'pulley'; startGame(d)

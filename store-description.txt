@@ -6,6 +6,8 @@ Four modes: Pulley (default), where two groups hang from one axle and the heavie
 
 Special bubbles from level 3: stars clear a colour, rainbows join any colour, bombs blow away their neighbours, ice takes two pops, stones only fall, and mystery bubbles hide their colour. Consecutive scoring shots build a combo up to x5. Start from any level you have reached.
 
+For easier reading on the monochrome display, ordinary bubble shapes can be switched to the unambiguous digits 1–8 from the phone or glasses menu.
+
 The phone page mirrors the glasses, shows your score, and explains every glyph.
 
 Free software under the GPL-2.0 (the levels are Frozen Bubble's). Source: https://github.com/reseed-ops/bubbles-even-g2

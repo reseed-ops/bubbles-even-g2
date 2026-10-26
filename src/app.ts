@@ -1,8 +1,8 @@
 import type { EvenAppBridge } from '@evenrealities/even_hub_sdk'
-import { BOMB, FROZEN, MAX_LEVEL, MAX_TICK_DT, MYSTERY_BASE, RAINBOW, SHOOTER_Y, STAR, STONE, SWIPE_AIM_DEG, TICK_MS } from './layout.ts'
+import { BOMB, BUBBLE_SPEED, FROZEN, MAX_LEVEL, MAX_TICK_DT, MAX_VISIBLE_CELLS_PER_FRAME, MYSTERY_BASE, RAINBOW, SHOOTER_Y, STAR, STONE, SWIPE_AIM_DEG, TICK_MS } from './layout.ts'
 import { aimAngle, chooseStartLevel, continueGame, createGame, emptyStats, fire, idx, isOver, isPlaying, nudgeToNextLanding, paceEvery, setAim, skipLevel, startGame, swapBubbles, tick, DIFFICULTIES, MODES, type Difficulty, type Game, type Mode, type Phase, type Stats } from './game.ts'
 import { modeName, renderFireworks, renderGameOver, renderGrid, renderLevelCard, renderSplash } from './grid.ts'
-import { currentPage, frameMeter, invalidate, pushScreen, showPage, whenIdle, type FrameMeter, type PageKind } from './renderer.ts'
+import { currentPage, currentRenderMode, frameMeter, invalidate, pushScreen, setRenderMode, showPage, whenIdle, type FrameMeter, type PageKind, type RenderMode } from './renderer.ts'
 import { toInput, type Input } from './events.ts'
 
 const HIGH_SCORE_KEY = 'bubbles_high_score'  // classic; other modes append _<mode>
@@ -10,6 +10,7 @@ const LEVEL_KEY = 'bubbles_level_reached'
 const MODE_KEY = 'bubbles_mode'
 const DIFFICULTY_KEY = 'bubbles_difficulty'
 const STATS_KEY = 'bubbles_stats'
+const LEGIBILITY_KEY = 'bubbles_high_legibility'
 const highScoreKey = (mode: Mode) => (mode === 'classic' ? HIGH_SCORE_KEY : `${HIGH_SCORE_KEY}_${mode}`)
 
 export type Status = {
@@ -19,6 +20,8 @@ export type Status = {
   phase: Phase
   mode: Mode
   difficulty: Difficulty
+  highLegibility: boolean
+  renderMode: RenderMode
   levelReached: number
   stats: Stats
   level: number
@@ -28,6 +31,7 @@ export type Status = {
   pace: { label: string; value: string }   // what the wall or shot count is doing, in this mode's terms
   frame: FrameMeter | null  // measured BLE push round trip and frames per second, null until the first push
   pushCost: string | null   // result of the last push-cost measurement, kept until the next run
+  renderMs: number          // last pure grid-string render cost
 }
 
 export type PreviewKind = 'over' | 'won' | 'title' | 'blast' | 'specials' | 'card'
@@ -38,8 +42,10 @@ export type App = {
   centerAim: () => void
   setMode: (mode: Mode) => void
   setDifficulty: (d: Difficulty) => void
+  setHighLegibility: (enabled: boolean) => void
+  setRenderer: (mode: RenderMode) => void
   setStartLevel: (level: number) => void
-  measurePush: () => void          // times full, tiny and ASCII-spaced screens on the glasses
+  measurePush: () => void          // compares full-screen and dirty-band refresh cost
   preview: (kind: PreviewKind) => void   // developer aid: shows an end screen with sample numbers
   status: () => Status
 }
@@ -59,8 +65,10 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
   let levelCardSkip = false          // the harder path is selected on the card
   let levelCardTap: (() => void) | null = null
   let continueOffered = false        // game over, with the second chance on the table
+  let pendingMode: Mode | null = null  // chosen mid-game; the running game keeps its rules and its best
   let measuring = false              // push-cost test running on the title screen
   let pushCost: string | null = null
+  let renderMs = 0
 
   async function loadHighScore(): Promise<void> {
     try {
@@ -76,6 +84,7 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
     }
     const savedDifficulty = await bridge.getLocalStorage(DIFFICULTY_KEY)
     if (DIFFICULTIES.includes(savedDifficulty as Difficulty)) game.difficulty = savedDifficulty as Difficulty
+    game.highLegibility = (await bridge.getLocalStorage(LEGIBILITY_KEY)) === '1'
     try {
       const saved = JSON.parse((await bridge.getLocalStorage(STATS_KEY)) || '{}') as Partial<Stats>
       game.stats = { ...emptyStats(), ...saved }
@@ -108,8 +117,10 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
     page: currentPage(),
     screen: screenText,
     phase: game.phase,
-    mode: game.mode,
+    mode: pendingMode ?? game.mode,
     difficulty: game.difficulty,
+    highLegibility: game.highLegibility,
+    renderMode: currentRenderMode(),
     levelReached: game.levelReached,
     stats: game.stats,
     level: isPlaying(game) || isOver(game) ? game.level : game.startLevel,
@@ -119,6 +130,7 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
     pace: pace(),
     frame: frameMeter(),
     pushCost,
+    renderMs,
   })
   const shots = (n: number) => `${n} ${n === 1 ? 'shot' : 'shots'}`
   const pace = (): { label: string; value: string } => {
@@ -148,7 +160,9 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
     // Clear first: input arriving during the BLE write marks the next frame
     // dirty instead of having its newer aim accidentally cleared.
     screenDirty = false
+    const renderStarted = performance.now()
     const screen = renderGrid(game)
+    renderMs = Math.round((performance.now() - renderStarted) * 100) / 100
     screenText = screen
     await pushScreen(bridge, screen)
     onStatus(status())
@@ -215,9 +229,10 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
           lastTick = Date.now()        // time under the menu or a measurement does not count
           continue
         }
-        // Motion is time based: a slow push means a longer step, not a slower game.
+        // Motion follows elapsed time, capped below for a trackable visible step.
         const dt = Math.min(MAX_TICK_DT, (started - lastTick) / TICK_MS)
         lastTick = started
+        game.speed = Math.min(BUBBLE_SPEED, MAX_VISIBLE_CELLS_PER_FRAME / Math.max(1, dt))
         const changed = tick(game, dt)
         if (game.justCleared) {
           game.justCleared = false
@@ -246,6 +261,7 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
     if (transitionRunning) return
     transitionRunning = true
     try {
+      await applyPendingMode()
       startGame(game)
       screenDirty = true
       invalidate()
@@ -280,17 +296,27 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
   }
 
   function setMode(mode: Mode): void {
-    if (game.mode === mode) return
-    game.mode = mode
+    if ((pendingMode ?? game.mode) === mode) return
     void bridge.setLocalStorage(MODE_KEY, mode).catch(() => {})
     if (isPlaying(game)) {
-      report(`${modeName(game)} from the next game`)
+      // The game in progress keeps its mode: its rules, and the best it is scored against.
+      pendingMode = mode === game.mode ? null : mode
+      report(`${modeName({ ...game, mode })} from the next game`)
     } else {
+      pendingMode = null
+      game.mode = mode
       void loadHighScore().then(() => {
         invalidate()
         return showCurrentScreen()
       }).then(() => report(modeName(game)))
     }
+  }
+
+  async function applyPendingMode(): Promise<void> {
+    if (!pendingMode) return
+    game.mode = pendingMode
+    pendingMode = null
+    await loadHighScore()
   }
 
   function setDifficulty(d: Difficulty): void {
@@ -302,6 +328,24 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
     if (!isPlaying(game)) onStatus(status())
   }
 
+  function setHighLegibility(enabled: boolean): void {
+    if (game.highLegibility === enabled) return
+    game.highLegibility = enabled
+    void bridge.setLocalStorage(LEGIBILITY_KEY, enabled ? '1' : '0').catch(() => {})
+    screenDirty = true
+    invalidate()
+    if (isPlaying(game)) report(enabled ? 'Numeric bubble glyphs' : 'Shape bubble glyphs')
+    else void showCurrentScreen().then(() => report(enabled ? 'Numeric bubble glyphs' : 'Shape bubble glyphs'))
+  }
+
+  function setRenderer(next: RenderMode): void {
+    const screen = currentScreen()
+    void whenIdle().then(() => setRenderMode(bridge, next, screen)).then(() => {
+      screenText = screen
+      report(`${next === 'bands' ? 'Banded' : 'Full-screen'} renderer`)
+    })
+  }
+
   // The phone page's level field: pick any level up to the one reached.
   function setStartLevel(level: number): void {
     if (!Number.isFinite(level)) return
@@ -310,50 +354,43 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
     else onStatus(status())
   }
 
-  // Developer aid, from the phone page at any time; a game in progress pauses
-  // while it runs. Pushes the current screen, a one-character screen and the
-  // current screen with each empty cell as two ASCII spaces (two bytes instead
-  // of three), several times each, and reports the mean round trip of each.
-  // The ASCII-spaced screen is left showing so the player can see whether its
-  // columns still line up; the next real frame replaces it.
+  // Compare the fallback whole-screen path with a normal dirty three-row band
+  // on the attached firmware. A game in progress pauses during the probe.
   async function measurePush(): Promise<void> {
     if (measuring || !currentPage()) return
     measuring = true
     pushCost = 'Measuring…'
     report('Measuring push cost')
     try {
-      const full = currentScreen()
-      const ascii = full.replace(/\u3000/g, '  ')
-      const tiny = 'Ａ'
-      // Probes that separate byte cost from drawing cost: a blank grid of
-      // fullwidth spaces (all the bytes, nothing drawn), the same blank in
-      // ASCII spaces (a third of the bytes, nothing drawn) and a grid of dots
-      // (all the bytes, every cell drawn).
-      const rows = full.split('\n')
-      const blank3 = rows.map((r) => '\u3000'.repeat([...r].length)).join('\n')
-      const blank1 = rows.map((r) => '  '.repeat([...r].length)).join('\n')
-      const dots = rows.map((r) => '●'.repeat([...r].length)).join('\n')
-      const times: Record<string, number[]> = { full: [], tiny: [], ascii: [], blank3: [], blank1: [], dots: [] }
+      const board = currentScreen()
+      const changeCell = (text: string, y: number, x: number, glyph: string) => {
+        const rows = text.split('\n')
+        const cells = [...(rows[y] ?? '')]
+        if (cells.length) { cells[Math.min(x, cells.length - 1)] = glyph; rows[y] = cells.join('') }
+        return rows.join('\n')
+      }
+      const old = [...(board.split('\n')[4] ?? '')][10]
+      const alternate = changeCell(board, 4, 10, old === '・' ? '◌' : '・')
+      const times: Record<string, number[]> = { full: [], band: [] }
       const timed = async (name: string, text: string) => {
         await whenIdle()          // a frame still in flight would make the push drop, not queue
         const t0 = Date.now()
-        invalidate()
         const ok = await pushScreen(bridge, text)
         if (ok) times[name].push(Date.now() - t0)
         screenText = text
         onStatus(status())
       }
-      for (let round = 0; round < 3; round++) {
-        await timed('full', full)
-        await timed('tiny', tiny)
-        await timed('blank3', blank3)
-        await timed('dots', dots)
-        await timed('blank1', blank1)
-        await timed('ascii', ascii)
-      }
+      const previousMode = currentRenderMode()
+      if (previousMode !== 'full') await setRenderMode(bridge, 'full', board)
+      for (let round = 0; round < 3; round++) { await timed('full', alternate); await timed('full', board) }
+      await setRenderMode(bridge, 'bands', board)
+      for (let round = 0; round < 3; round++) { await timed('band', alternate); await timed('band', board) }
       const mean = (xs: number[]) => (xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : NaN)
-      pushCost = `Board ${mean(times.full)} ms, one letter ${mean(times.tiny)} ms, blank fullwidth ${mean(times.blank3)} ms, blank ASCII ${mean(times.blank1)} ms, all dots ${mean(times.dots)} ms, ASCII-spaced board ${mean(times.ascii)} ms`
-      report('Measured. The glasses now show the ASCII-spaced screen: do its columns line up?')
+      if (previousMode === 'full') await setRenderMode(bridge, 'full', board)
+      else await pushScreen(bridge, board)
+      screenText = board
+      pushCost = `Full screen ${mean(times.full)} ms; one dirty three-row band ${mean(times.band)} ms. Current: ${previousMode}.`
+      report('Measured full-screen and dirty-band refresh cost.')
     } finally {
       measuring = false
     }
@@ -433,6 +470,7 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
         if (input.id === 5) setMode('endless')
         if (input.id === 6) setMode('puzzle')
         if (input.id === 7) setDifficulty(DIFFICULTIES[(DIFFICULTIES.indexOf(game.difficulty) + 1) % DIFFICULTIES.length])
+        if (input.id === 8) setHighLegibility(!game.highLegibility)
         break
       case 'overlay-open':
         overlayOpen = true
@@ -521,6 +559,8 @@ export async function initApp(bridge: EvenAppBridge, onStatus: (s: Status) => vo
     centerAim,
     setMode,
     setDifficulty,
+    setHighLegibility,
+    setRenderer,
     setStartLevel,
     measurePush: () => { void measurePush() },
     preview,

@@ -180,6 +180,13 @@
         </div>
       </div>
       <div class="choice">
+        <span class="choice-name">Bubbles</span>
+        <div class="segments" role="group" aria-label="Bubble glyphs">
+          <button data-legibility="shapes" aria-pressed="true" disabled>Shapes</button>
+          <button data-legibility="numbers" aria-pressed="false" disabled>Numbers</button>
+        </div>
+      </div>
+      <div class="choice">
         <label class="choice-name" for="start-level">Start level</label>
         <div class="level-pick">
           <input id="start-level" type="number" inputmode="numeric" min="1" max="1" value="1" disabled />
@@ -209,7 +216,7 @@
       </dl>
 
       <dl class="legend">
-        <dt>● ○ ◎ ◆ ◇ ■ □ ★</dt><dd>The eight colours. Three or more touching pop; anything left hanging falls.</dd>
+        <dt>● ○ ◎ ◆ ◇ ■ □ ♥</dt><dd>The eight colours. Switch to numeric glyphs if the shapes are hard to distinguish.</dd>
         <dt>☆</dt><dd>Star. A shot landing beside it clears every bubble of that shot's colour.</dd>
         <dt>※</dt><dd>Rainbow. Joins any colour. As a shot, it takes the colour that pops most.</dd>
         <dt>♨</dt><dd>Bomb. A shot landing beside it blows away everything around it, and bombs set each other off.</dd>
@@ -228,7 +235,14 @@
           <div><dt>Push</dt><dd id="push-ms">–</dd></div>
           <div><dt>Frames</dt><dd id="fps">–</dd></div>
           <div><dt>Skipped</dt><dd id="skipped">–</dd></div>
+          <div><dt>Path</dt><dd id="render-path">Dirty bands</dd></div>
+          <div><dt>Grid render</dt><dd id="grid-ms">–</dd></div>
+          <div><dt>Phone DOM</dt><dd id="phone-ms">–</dd></div>
         </dl>
+        <div class="segments" role="group" aria-label="Display update path">
+          <button data-renderer="bands" aria-pressed="true" disabled>Dirty bands</button>
+          <button data-renderer="full" aria-pressed="false" disabled>Full screen</button>
+        </div>
         <button id="measure" disabled>Measure push cost</button>
         <p id="push-cost" class="muted">Not measured yet. A game in progress pauses while it runs.</p>
       </details>
