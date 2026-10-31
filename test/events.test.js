@@ -37,4 +37,7 @@ test('anything unrecognised is dropped rather than fired as a shot', () => {
   assert.equal(toInput({ sysEvent: { eventType: 42 } }), null)
   assert.equal(toInput({ jsonData: { eventType: 'SOME_NEW_EVENT' } }), null, 'an unknown event name')
   assert.equal(toInput({ jsonData: { eventType: 'HEAD_GESTURE' } }), null)
+  assert.equal(toInput({ listEvent: { eventType: 99 } }), null, 'an unknown type in the list shape too')
+  assert.equal(toInput({ jsonData: { eventType: 1234 } }), null, 'an unknown numeric type in raw JSON')
+  assert.equal(toInput({ sysEvent: { eventType: 'SOME_NEW_EVENT' } }), null, 'an unknown name in the sys shape')
 })

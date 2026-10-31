@@ -280,6 +280,38 @@ test('bombs, ice and mysteries', () => {
   assert.ok(renderGrid(n).includes('？'), 'hidden bubbles draw as a question mark')
 })
 
+test('a bomb takes ice in one, but ice beside a blast is only cracked', () => {
+  // Ice and cracked ice caught in a bomb's ring are blown away outright:
+  // the bomb is the one thing that takes ice in a single hit.
+  const g = classic(); startGame(g)
+  g.field.fill(0)
+  const w = g.wallCol
+  g.field[idx(w, SHOOTER_Y)] = 1; g.field[idx(w - 1, SHOOTER_Y)] = BOMB
+  g.field[idx(w, SHOOTER_Y - 1)] = FROZEN; g.field[idx(w, SHOOTER_Y + 1)] = CRACKED
+  g.field[idx(w, 0)] = 4
+  g.loaded = 5; shoot(g)
+  assert.equal(g.field[idx(w, SHOOTER_Y - 1)], 0, 'ice in the blast is gone, not just cracked')
+  assert.equal(g.field[idx(w, SHOOTER_Y + 1)], 0, 'cracked ice in the blast is gone too')
+
+  // Ice that only stands beside the blast is a pop beside it: cracked, not freed.
+  const h = classic(); startGame(h)
+  h.field.fill(0)
+  h.field[idx(w, SHOOTER_Y)] = 1; h.field[idx(w - 1, SHOOTER_Y)] = BOMB
+  h.field[idx(w, SHOOTER_Y - 1)] = 2
+  h.field[idx(w, SHOOTER_Y - 2)] = FROZEN // beside a cell the blast takes, outside the ring itself
+  h.field[idx(w, 0)] = 4
+  h.loaded = 5; shoot(h)
+  assert.equal(h.field[idx(w, SHOOTER_Y - 2)], CRACKED, 'beside the blast: cracked only')
+
+  // A bomb shot goes off where it lands and takes the ice beside it in one.
+  const b = classic(); startGame(b)
+  b.field.fill(0)
+  b.field[idx(w, SHOOTER_Y)] = 1; b.field[idx(w, SHOOTER_Y - 1)] = FROZEN
+  b.field[idx(w, 0)] = 3
+  b.loaded = BOMB; shoot(b)
+  assert.equal(b.field[idx(w, SHOOTER_Y - 1)], 0, 'a bomb shot takes neighbouring ice outright')
+})
+
 test('combo multiplier, swap, and the bubble after next', () => {
   const g = classic(); startGame(g)
   const w = g.wallCol
@@ -336,7 +368,12 @@ test('endless mode pushes columns instead of moving the wall; puzzle mode limits
   for (let i = 0; i < shots && p.phase === 'play'; i++) { p.loaded = 3; setAim(p, 0); fire(p); let n = 0; while (p.flying && n++ < 400) tick(p) }
   assert.equal(p.phase, 'over', 'out of shots with bubbles left is game over')
   assert.equal(p.wallCol, wall, 'the wall never advanced in puzzle mode')
-  for (let i = 0; i < HURRY_TICKS + 5; i++) tick(createGame())
+  // Puzzle mode has no hurry-up clock: idling there never advances anything.
+  const pz = createGame(); pz.mode = 'puzzle'; startGame(pz)
+  const pzWall = pz.wallCol
+  for (let i = 0; i < HURRY_TICKS + 5; i++) tick(pz)
+  assert.equal(pz.idleTicks, 0, 'no idle time accrues in puzzle mode')
+  assert.equal(pz.wallCol, pzWall, 'and its wall never moves')
 })
 
 test('clearing level 100 ends the game as a win', () => {
@@ -487,7 +524,8 @@ test('levels past 100 are generated, hanging, seeded and bounded', () => {
   w.loaded = 1; shoot(w)
   assert.equal(w.won, true)
   assert.equal(w.levelReached, LEVEL_COUNT + 1)
-  assert.ok(chooseStartLevel(w, 1) || w.startLevel === LEVEL_COUNT + 1)
+  assert.ok(chooseStartLevel(w, 1), 'the unlocked level can be picked')
+  assert.equal(w.startLevel, LEVEL_COUNT + 1)
   // Level 101 itself does not end the game when cleared.
   const b = classic(); b.levelReached = 101; startGame(b, { level: 101 })
   b.field.fill(0); b.field[idx(b.wallCol, SHOOTER_Y)] = 1; b.field[idx(b.wallCol - 1, SHOOTER_Y)] = 1
@@ -859,7 +897,7 @@ test('tick scales motion, effects and the hurry clock by elapsed time', () => {
     const frames = c.effectFrame
     tick(c, 0.5)
     assert.equal(c.effectFrame, frames - 0.5, 'effects count down in fractional ticks')
-    assert.ok(renderGrid(c).length > 0, 'a fractional effect age still renders')
+    assert.equal(renderGrid(c).split('\n').length, ROWS, 'a fractional effect age still renders a full grid')
     const visibleStage = c.effectFrame
     tick(c, 2.5)
     assert.equal(c.effectFrame, Math.max(0, visibleStage - 1), 'a slow display cannot skip effect stages')
