@@ -1,7 +1,7 @@
 // Turns game state into the text the glasses show. Pure: no SDK imports.
 import {
   COLS, DEAD_COL, ROWS, SCREEN_ROWS, SHOOTER_X, SHOOTER_Y,
-  SKIP_POINTS, BOMB, FROZEN, CRACKED,
+  SKIP_POINTS,
 } from './layout.ts'
 import { aimAngle, aimPath, blinkOn, comboMultiplier, idx, isMystery, paceEvery, wallFor, wallWarning, LEVEL_COUNT, type Game, type Mode } from './game.ts'
 
@@ -27,7 +27,6 @@ const PICKUP = '＋'  // fly through it to load a special
 // sparkle, burst, then fade; the blast rings ripple outward one frame later each.
 const POP_BY_AGE = ['★', '◎', '◌', '・']
 const RING_BY_AGE = ['・', '◌', '・']
-const SPARKLE = ['★', '◎', '◌', '・']
 // Frozen Bubble's eight colours, then star, rainbow, stone, bomb, ice and cracked ice.
 export const BUBBLE = ['', '●', '○', '◎', '◆', '◇', '■', '□', '♥', '☆', '※', '▩', '♨', '▦', '▤']
 const LEGIBLE_COLOUR = ['', '１', '２', '３', '４', '５', '６', '７', '８']
@@ -35,7 +34,6 @@ const MYSTERY = '？'
 export const glyphFor = (type: number, highLegibility = false): string =>
   (highLegibility && type >= 1 && type < LEGIBLE_COLOUR.length) ? LEGIBLE_COLOUR[type]
     : isMystery(type) ? MYSTERY : BUBBLE[type] ?? MYSTERY
-void BOMB; void FROZEN; void CRACKED
 
 // Below this angle the line is flat, above the upper one it is upright;
 // in between every cell gets a slash so a diagonal aim reads as one line.
@@ -194,7 +192,7 @@ export function renderFireworks(g: Game, frame: number): string {
   for (let y = 0; y < ROWS; y++) {
     for (let x = DEAD_COL + 1; x <= g.wallCol; x++) {
       const h = (x * 31 + y * 17 + frame * 7) % 11
-      if (h < 3 && cells[idx(x, y)] === EMPTY) cells[idx(x, y)] = SPARKLE[(h + frame) % SPARKLE.length]
+      if (h < 3 && cells[idx(x, y)] === EMPTY) cells[idx(x, y)] = POP_BY_AGE[(h + frame) % POP_BY_AGE.length]
     }
   }
   return rowsToText(cells)
